@@ -1085,6 +1085,15 @@ and transl_let rec_flag pat_expr_list body =
       let rec transl = function
         [] ->
           body
+        | {vb_pat={pat_desc=Tpat_var (id, _)}; vb_expr=expr} :: rem
+          when has_base_type expr Predef.path_float
+            || has_base_type expr Predef.path_int32
+            || has_base_type expr Predef.path_int64
+            || has_base_type expr Predef.path_nativeint ->
+            let lam = transl_exp expr in
+            let lam = Lprim(Pis_boxed_number, [lam]) in
+            Llet(Strict, id, lam, transl rem)
+
       | {vb_pat=pat; vb_expr=expr} :: rem ->
           Matching.for_let pat.pat_loc (transl_exp expr) pat (transl rem)
       in transl pat_expr_list

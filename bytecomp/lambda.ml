@@ -126,6 +126,9 @@ type primitive =
   (* Integer to external pointer *)
   | Pint_as_pointer
 
+  (* Special identity to mark boxed number binding *)
+  | Pis_boxed_number
+
 and comparison =
     Ceq | Cneq | Clt | Cgt | Cle | Cge
 

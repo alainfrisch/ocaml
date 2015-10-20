@@ -1293,14 +1293,16 @@ let unboxed_number_kind_of_unbox = function
   | Unboxed_integer bi -> Boxed (Boxed_integer bi)
   | Untagged_int -> No_unboxing
 
-let rec is_unboxed_number env e =
+let rec is_unboxed_number ~strict env e =
   (* Given unboxed_number_kind from two branches of the code, returns the
      resulting unboxed_number_kind *)
   let join k1 e =
-    match k1, is_unboxed_number env e with
+    match k1, is_unboxed_number ~strict env e with
     | Boxed b1, Boxed b2 when b1 = b2 -> Boxed b1
     | No_result, k | k, No_result ->
         k (* if a branch never returns, it is safe to unbox it *)
+    | No_unboxing, k | k, No_unboxing when not strict ->
+        k
     | _, _ -> No_unboxing
   in
   match e with
@@ -1357,7 +1359,7 @@ let rec is_unboxed_number env e =
         | _ -> No_unboxing
       end
   | Ulet (_, _, e) | Uletrec (_, e) | Usequence (_, e) ->
-      is_unboxed_number env e
+      is_unboxed_number ~strict env e
   | Uswitch (_, switch) ->
       let k = Array.fold_left join No_result switch.us_actions_consts in
       Array.fold_left join k switch.us_actions_blocks
@@ -1369,7 +1371,7 @@ let rec is_unboxed_number env e =
       end
   | Ustaticfail _ -> No_result
   | Uifthenelse (_, e1, e2) | Ucatch (_, _, e1, e2) | Utrywith (e1, _, e2) ->
-      join (is_unboxed_number env e1) e2
+      join (is_unboxed_number ~strict env e1) e2
   | _ -> No_unboxing
 
 (* Translate an expression *)
@@ -2207,8 +2209,15 @@ and transl_unbox_number env bn arg =
   | Boxed_integer bi -> transl_unbox_int env bi arg
 
 and transl_let env id exp body =
-  match is_unboxed_number env exp with
-  |  No_unboxing ->
+  let bn, exp =
+    match exp with
+    | Uprim(Pis_boxed_number, [exp], _) ->
+        is_unboxed_number ~strict:false env exp, exp
+    | _ ->
+        is_unboxed_number ~strict:true env exp, exp
+  in
+  match bn with
+  | No_unboxing ->
       Clet(id, transl env exp, transl env body)
   | No_result ->
       (* the let-bound expression never returns a value, we can ignore
