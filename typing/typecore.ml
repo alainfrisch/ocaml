@@ -199,6 +199,7 @@ let iter_expression f e =
     | Pstr_open _
     | Pstr_class_type _
     | Pstr_attribute _
+    | Pstr_include_type _
     | Pstr_extension _ -> ()
     | Pstr_include {pincl_mod = me}
     | Pstr_module {pmb_expr = me} -> module_expr me

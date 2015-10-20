@@ -674,6 +674,9 @@ and signature_item i ppf x =
       line i ppf "Psig_include\n";
       module_type i ppf incl.pincl_mod;
       attributes i ppf incl.pincl_attributes
+  | Psig_include_type incl ->
+      line i ppf "Psig_include_type %a\n" fmt_longident_loc incl.pincl_mod;
+      attributes i ppf incl.pincl_attributes
   | Psig_class (l) ->
       line i ppf "Psig_class\n";
       list i class_description ppf l;
@@ -787,6 +790,9 @@ and structure_item i ppf x =
       line i ppf "Pstr_include";
       attributes i ppf incl.pincl_attributes;
       module_expr i ppf incl.pincl_mod
+  | Pstr_include_type incl ->
+      line i ppf "Pstr_include_type %a\n" fmt_longident_loc incl.pincl_mod;
+      attributes i ppf incl.pincl_attributes
   | Pstr_extension ((s, arg), attrs) ->
       line i ppf "Pstr_extension \"%s\"\n" s.txt;
       attributes i ppf attrs;

@@ -666,6 +666,8 @@ and signature_item_desc =
         (* open X *)
   | Psig_include of include_description
         (* include MT *)
+  | Psig_include_type of include_type
+        (* include type M.t *)
   | Psig_class of class_description list
         (* class c1 : ... and ... and cn : ... *)
   | Psig_class_type of class_type_declaration list
@@ -719,6 +721,9 @@ and include_description = module_type include_infos
 
 and include_declaration = module_expr include_infos
 (* include ME *)
+
+and include_type = Longident.t loc include_infos
+(* include type M.t *)
 
 and with_constraint =
   | Pwith_type of Longident.t loc * type_declaration
@@ -797,6 +802,8 @@ and structure_item_desc =
         (* class type ct1 = ... and ... and ctn = ... *)
   | Pstr_include of include_declaration
         (* include ME *)
+  | Pstr_include_type of include_type
+        (* include type M.t *)
   | Pstr_attribute of attribute
         (* [@@@id] *)
   | Pstr_extension of extension * attributes

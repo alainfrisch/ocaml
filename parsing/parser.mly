@@ -773,6 +773,8 @@ structure_item:
       { mkstr(Pstr_class_type (List.rev $1)) }
   | str_include_statement
       { mkstr(Pstr_include $1) }
+  | include_type
+      { mkstr(Pstr_include_type $1) }
   | item_extension post_item_attributes
       { mkstr(Pstr_extension ($1, (add_docs_attrs (symbol_docs ()) $2))) }
   | floating_attribute
@@ -868,6 +870,8 @@ signature_item:
       { mksig(Psig_open $1) }
   | sig_include_statement
       { mksig(Psig_include $1) }
+  | include_type
+      { mksig(Psig_include_type $1) }
   | class_descriptions
       { mksig(Psig_class (List.rev $1)) }
   | class_type_declarations
@@ -886,6 +890,11 @@ open_statement:
 sig_include_statement:
     INCLUDE module_type post_item_attributes %prec below_WITH
       { Incl.mk $2 ~attrs:$3
+                ~loc:(symbol_rloc()) ~docs:(symbol_docs ()) }
+;
+include_type:
+  | INCLUDE TYPE type_longident post_item_attributes
+      { Incl.mk (mkrhs $3 3) ~attrs:$4
                 ~loc:(symbol_rloc()) ~docs:(symbol_docs ()) }
 ;
 module_declaration_body:

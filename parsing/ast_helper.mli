@@ -238,6 +238,7 @@ module Sig:
     val modtype: ?loc:loc -> module_type_declaration -> signature_item
     val open_: ?loc:loc -> open_description -> signature_item
     val include_: ?loc:loc -> include_description -> signature_item
+    val include_type: ?loc:loc -> include_type -> signature_item
     val class_: ?loc:loc -> class_description list -> signature_item
     val class_type: ?loc:loc -> class_type_declaration list -> signature_item
     val extension: ?loc:loc -> ?attrs:attrs -> extension -> signature_item
@@ -263,6 +264,7 @@ module Str:
     val class_: ?loc:loc -> class_declaration list -> structure_item
     val class_type: ?loc:loc -> class_type_declaration list -> structure_item
     val include_: ?loc:loc -> include_declaration -> structure_item
+    val include_type: ?loc:loc -> include_type -> structure_item
     val extension: ?loc:loc -> ?attrs:attrs -> extension -> structure_item
     val attribute: ?loc:loc -> attribute -> structure_item
     val text: text -> structure_item list

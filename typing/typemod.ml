@@ -98,6 +98,10 @@ let type_module_type_of_fwd :
       Typedtree.module_expr * Types.module_type) ref
   = ref (fun env m -> assert false)
 
+let type_module_fwd :
+  (Env.t -> Parsetree.module_expr -> Typedtree.module_expr) ref
+  = ref (fun env m -> assert false)
+
 (* Merge one "with" constraint in a signature *)
 
 let rec add_rec_types env = function
@@ -682,6 +686,36 @@ and transl_signature env sg =
             mksig (Tsig_include incl) env loc :: trem,
             sg @ rem,
             final_env
+        | Psig_include_type _sincl ->
+            failwith "include type not yet implemented"
+(*
+            let loc = sincl.pincl_mod.loc in
+            let mlid, name =
+              match sincl.pincl_mod.txt with
+              | Longident.Ldot (p, s) -> p, s
+              | _ -> failwith "XXX"
+            in
+            let mexpr = !type_module_fwd env
+                (Ast_helper.Mod.ident ~loc (mknoloc mlid)) in
+            let mty = mexpr.mod_type in
+            let sg = Subst.signature Subst.identity (extract_sig_open env loc mty) in
+            let sg =
+              List.filter
+                (function
+                  | Sig_type (id, _, _) -> Ident.name id = name
+                  | _ -> false
+                )
+                sg
+            in
+            List.iter (check_sig_item names loc) sg;
+            let newenv = Env.add_signature sg env in
+            let (trem, rem, final_env) = transl_sig newenv srem  in
+            trem,
+            sg @ rem,
+            final_env
+
+*)
+
         | Psig_class cl ->
             List.iter
               (fun {pci_name} -> check_name check_type names pci_name)
@@ -1418,6 +1452,8 @@ and type_structure ?(toplevel = false) funct_body anchor env sstr scope =
           }
         in
         Tstr_include incl, sg, new_env
+    | Pstr_include_type _ ->
+        failwith "include type not yet implemented"
     | Pstr_extension (ext, _attrs) ->
         raise (Error_forward (Typetexp.error_of_extension ext))
     | Pstr_attribute x ->
@@ -1537,6 +1573,7 @@ let type_package env m p nl tl =
 
 (* Fill in the forward declarations *)
 let () =
+  type_module_fwd := type_module;
   Typecore.type_module := type_module_alias;
   Typetexp.transl_modtype_longident := transl_modtype_longident;
   Typetexp.transl_modtype := transl_modtype;

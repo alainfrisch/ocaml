@@ -166,6 +166,7 @@ module Sig = struct
   let modtype ?loc a = mk ?loc (Psig_modtype a)
   let open_ ?loc a = mk ?loc (Psig_open a)
   let include_ ?loc a = mk ?loc (Psig_include a)
+  let include_type ?loc a = mk ?loc (Psig_include_type a)
   let class_ ?loc a = mk ?loc (Psig_class a)
   let class_type ?loc a = mk ?loc (Psig_class_type a)
   let extension ?loc ?(attrs = []) a = mk ?loc (Psig_extension (a, attrs))
@@ -192,6 +193,7 @@ module Str = struct
   let class_ ?loc a = mk ?loc (Pstr_class a)
   let class_type ?loc a = mk ?loc (Pstr_class_type a)
   let include_ ?loc a = mk ?loc (Pstr_include a)
+  let include_type ?loc a = mk ?loc (Pstr_include_type a)
   let extension ?loc ?(attrs = []) a = mk ?loc (Pstr_extension (a, attrs))
   let attribute ?loc a = mk ?loc (Pstr_attribute a)
   let text txt =

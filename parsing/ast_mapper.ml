@@ -46,6 +46,7 @@ type mapper = {
                          -> extension_constructor;
   include_declaration: mapper -> include_declaration -> include_declaration;
   include_description: mapper -> include_description -> include_description;
+  include_type: mapper -> include_type -> include_type;
   label_declaration: mapper -> label_declaration -> label_declaration;
   location: mapper -> Location.t -> Location.t;
   module_binding: mapper -> module_binding -> module_binding;
@@ -252,6 +253,7 @@ module MT = struct
     | Psig_modtype x -> modtype ~loc (sub.module_type_declaration sub x)
     | Psig_open x -> open_ ~loc (sub.open_description sub x)
     | Psig_include x -> include_ ~loc (sub.include_description sub x)
+    | Psig_include_type x -> include_type ~loc (sub.include_type sub x)
     | Psig_class l -> class_ ~loc (List.map (sub.class_description sub) l)
     | Psig_class_type l ->
         class_type ~loc (List.map (sub.class_type_declaration sub) l)
@@ -302,6 +304,7 @@ module M = struct
     | Pstr_class_type l ->
         class_type ~loc (List.map (sub.class_type_declaration sub) l)
     | Pstr_include x -> include_ ~loc (sub.include_declaration sub x)
+    | Pstr_include_type x -> include_type ~loc (sub.include_type sub x)
     | Pstr_extension (x, attrs) ->
         extension ~loc (sub.extension sub x) ~attrs:(sub.attributes sub attrs)
     | Pstr_attribute x -> attribute ~loc (sub.attribute sub x)
@@ -556,6 +559,13 @@ let default_mapper =
     include_description =
       (fun this {pincl_mod; pincl_attributes; pincl_loc} ->
          Incl.mk (this.module_type this pincl_mod)
+           ~loc:(this.location this pincl_loc)
+           ~attrs:(this.attributes this pincl_attributes)
+      );
+
+    include_type =
+      (fun this {pincl_mod; pincl_attributes; pincl_loc} ->
+         Incl.mk (map_loc this pincl_mod)
            ~loc:(this.location this pincl_loc)
            ~attrs:(this.attributes this pincl_attributes)
       );
