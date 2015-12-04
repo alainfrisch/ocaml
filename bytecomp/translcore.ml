@@ -703,6 +703,11 @@ and transl_exp0 e =
   | Texp_ident(path, _, {val_kind = Val_anc _}) ->
       raise(Error(e.exp_loc, Free_super_var))
   | Texp_ident(path, _, {val_kind = Val_reg | Val_self _}) ->
+      begin match path with
+      | Path.Pident id when has_base_type e Predef.path_float ->
+          Ident.mark_float id
+      | _ -> ()
+      end;
       transl_path ~loc:e.exp_loc e.exp_env path
   | Texp_ident _ -> fatal_error "Translcore.transl_exp: bad Texp_ident"
   | Texp_constant cst ->

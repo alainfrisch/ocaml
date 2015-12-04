@@ -16,6 +16,7 @@ type t = { stamp: int; name: string; mutable flags: int }
 
 let global_flag = 1
 let predef_exn_flag = 2
+let float_flag = 4
 
 (* A stamp of 0 denotes a persistent identifier *)
 
@@ -75,6 +76,12 @@ let global i =
 
 let is_predef_exn i =
   (i.flags land predef_exn_flag) <> 0
+
+let mark_float i =
+  i.flags <- i.flags lor float_flag
+
+let is_float i =
+  (i.flags land float_flag) <> 0
 
 let print ppf i =
   match i.stamp with
