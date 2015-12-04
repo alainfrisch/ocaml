@@ -1315,8 +1315,8 @@ let rec is_unboxed_number ~strict env e =
   in
   match e with
   | Uvar id ->
-      if Ident.is_float id then Boxed Boxed_float
-      else begin match is_unboxed_id id env with
+      (* if Ident.is_float id then Boxed Boxed_float
+      else *) begin match is_unboxed_id id env with
       | None -> No_unboxing
       | Some (_, bn) -> Boxed bn
       end
@@ -1641,6 +1641,12 @@ let rec transl env e =
   | Uassign(id, exp) ->
       begin match is_unboxed_id id env with
       | None ->
+          begin match is_unboxed_number ~strict:true env exp with
+          | Boxed _ ->
+              Format.printf "Assigning boxed to unboxed ref %s@."
+                (Ident.unique_name id);
+          | _ -> ()
+          end;
           return_unit (Cassign(id, transl env exp))
       | Some (unboxed_id, bn) ->
           return_unit(Cassign(unboxed_id, transl_unbox_number env bn exp))
