@@ -15,7 +15,7 @@
 
 include Makefile.shared
 
-depend:
+.depend.nt: .depend
 	sed -e 's/\.o/.$(O)/g' .depend > .depend.nt
 
 include .depend.nt

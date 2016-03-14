@@ -14,3 +14,6 @@
 #**************************************************************************
 
 include Makefile
+
+%.$(O): %.c
+	$(BYTECC) -DNDEBUG -DNO_UNIX $(BYTECCCOMPOPTS) -c $<
