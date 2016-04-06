@@ -101,6 +101,10 @@ module type S =
     val diff: t -> t -> t
     (** Set difference. *)
 
+    val disjoint: t -> t -> bool
+    (** [disjoint t1 t2] test if two sets are disjoint, that is, have
+        no element in common. *)
+
     val compare: t -> t -> int
     (** Total ordering between sets. Can be used as the ordering function
        for doing sets of sets. *)

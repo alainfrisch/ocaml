@@ -154,6 +154,7 @@ module Set : sig
       val union : t -> t -> t
       val inter : t -> t -> t
       val diff : t -> t -> t
+      val disjoint : t -> t -> bool
       val compare : t -> t -> int
       val equal : t -> t -> bool
       val subset : t -> t -> bool
