@@ -127,16 +127,34 @@ type t = string
 let compare (x: t) (y: t) = Pervasives.compare x y
 external equal : string -> string -> bool = "caml_string_equal"
 
-let split sep s =
-  let r = ref [] in
-  let j = ref (length s) in
-  for i = length s - 1 downto 0 do
-    if unsafe_get s i = sep then begin
-      r := sub s (i + 1) (!j - i - 1) :: !r;
-      j := i
-    end
-  done;
-  sub s 0 !j :: !r
+let rec split_limit sep s len i0 i acc lim =
+  if i = len then
+    List.rev (sub s i0 (i - i0) :: acc)
+  else if unsafe_get s i = sep then
+    let acc = sub s i0 (i - i0) :: acc in
+    if lim = 1 then
+      List.rev (sub s (i + 1) (len - i - 1) :: acc)
+    else
+      split_limit sep s len (i + 1) (i + 1) acc (lim - 1)
+  else
+    split_limit sep s len i (i + 1) acc lim
+
+
+let split ?limit sep s =
+  match limit with
+  | Some 0 -> [s]
+  | Some limit when limit < 0 -> invalid_arg "String.split"
+  | Some limit -> split_limit sep s (length s) 0 0 [] limit
+  | None ->
+      let r = ref [] in
+      let j = ref (length s) in
+      for i = length s - 1 downto 0 do
+        if unsafe_get s i = sep then begin
+          r := sub s (i + 1) (!j - i - 1) :: !r;
+          j := i
+        end
+      done;
+      sub s 0 !j :: !r
 
 (* Deprecated functions implemented via other deprecated functions *)
 [@@@ocaml.warning "-3"]

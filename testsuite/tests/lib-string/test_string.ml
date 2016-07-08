@@ -23,16 +23,32 @@ let ref_string = build_string reference 256 [];;
 if String.escaped raw_string <> ref_string then failwith "test:String.escaped";;
 
 
-let check_split sep s =
-  let l = String.split sep s in
+let check_split ?limit sep s =
+  let l = String.split ?limit sep s in
   assert(List.length l > 0);
   assert(String.concat (String.make 1 sep) (String.split sep s) = s);
-  List.iter (String.iter (fun c -> assert (c <> sep))) l
+
+  let has_no_sep = String.iter (fun c -> assert (c <> sep)) in
+  match limit with
+  | None -> List.iter has_no_sep l
+  | Some limit ->
+      assert(List.length l <= limit + 1);
+(*      Printf.printf "limit = %i, s = %S, l = %S\n%!" limit s (String.concat "|" l); *)
+      List.iteri (fun i chunk -> if i < limit then has_no_sep chunk) l
 ;;
 
 let () =
-  let s = " abc def " in
-  for i = 0 to String.length s do
-    check_split ' ' (String.sub s 0 i)
-  done
+  let test s =
+    for i = 0 to String.length s do
+      check_split '.' (String.sub s 0 i);
+      for limit = 0 to 10 do
+        check_split ~limit '.' (String.sub s 0 i);
+      done
+    done
+  in
+  test ".abc.def..hij.k..";
+  test "";
+  test ".";
+  test "a";
+  test "a.b"
 ;;
