@@ -372,17 +372,17 @@ let sort_uniq cmp l =
          if c = 0 then [x1; x2]
          else if c < 0 then [x1; x2; x3]
          else let c = cmp x1 x3 in
-         if c = 0 then [x1; x2]
-         else if c < 0 then [x1; x3; x2]
-         else [x3; x1; x2]
+           if c = 0 then [x1; x2]
+           else if c < 0 then [x1; x3; x2]
+           else [x3; x1; x2]
        end else begin
          let c = cmp x1 x3 in
          if c = 0 then [x2; x1]
          else if c < 0 then [x2; x1; x3]
          else let c = cmp x2 x3 in
-         if c = 0 then [x2; x1]
-         else if c < 0 then [x2; x3; x1]
-         else [x3; x2; x1]
+           if c = 0 then [x2; x1]
+           else if c < 0 then [x2; x3; x1]
+           else [x3; x2; x1]
        end
     | n, l ->
        let n1 = n asr 1 in
@@ -408,17 +408,17 @@ let sort_uniq cmp l =
          if c = 0 then [x1; x2]
          else if c > 0 then [x1; x2; x3]
          else let c = cmp x1 x3 in
-         if c = 0 then [x1; x2]
-         else if c > 0 then [x1; x3; x2]
-         else [x3; x1; x2]
+           if c = 0 then [x1; x2]
+           else if c > 0 then [x1; x3; x2]
+           else [x3; x1; x2]
        end else begin
          let c = cmp x1 x3 in
          if c = 0 then [x2; x1]
          else if c > 0 then [x2; x1; x3]
          else let c = cmp x2 x3 in
-         if c = 0 then [x2; x1]
-         else if c > 0 then [x2; x3; x1]
-         else [x3; x2; x1]
+           if c = 0 then [x2; x1]
+           else if c > 0 then [x2; x3; x1]
+           else [x3; x2; x1]
        end
     | n, l ->
        let n1 = n asr 1 in

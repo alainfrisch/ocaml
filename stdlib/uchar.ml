@@ -28,12 +28,12 @@ let hi_bound = 0xE000
 let succ u =
   if u = lo_bound then hi_bound else
   if u = max then invalid_arg err_no_succ else
-  u + 1
+    u + 1
 
 let pred u =
   if u = hi_bound then lo_bound else
   if u = min then invalid_arg err_no_pred else
-  u - 1
+    u - 1
 
 let is_valid i = (min <= i && i <= lo_bound) || (hi_bound <= i && i <= max)
 let of_int i = if is_valid i then i else invalid_arg (err_not_sv i)
@@ -44,7 +44,7 @@ let is_char u = u < 256
 let of_char c = Char.code c
 let to_char u =
   if u > 255 then invalid_arg (err_not_latin1 u) else
-  Char.unsafe_chr u
+    Char.unsafe_chr u
 
 let unsafe_to_char = Char.unsafe_chr
 

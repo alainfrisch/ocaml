@@ -231,7 +231,7 @@ module Make(Ord: OrderedType) = struct
       | (Node(ll, lv, ld, lr, lh), Node(rl, rv, rd, rr, rh)) ->
           if lh > rh + 2 then bal ll lv ld (join lr v d r) else
           if rh > lh + 2 then bal (join l v d rl) rv rd rr else
-          create l v d r
+            create l v d r
 
     (* Merge two trees l and r into one.
        All elements of l must precede the elements of r.
@@ -327,9 +327,9 @@ module Make(Ord: OrderedType) = struct
         | (More(v1, d1, r1, e1), More(v2, d2, r2, e2)) ->
             let c = Ord.compare v1 v2 in
             if c <> 0 then c else
-            let c = cmp d1 d2 in
-            if c <> 0 then c else
-            compare_aux (cons_enum r1 e1) (cons_enum r2 e2)
+              let c = cmp d1 d2 in
+              if c <> 0 then c else
+                compare_aux (cons_enum r1 e1) (cons_enum r2 e2)
       in compare_aux (cons_enum m1 End) (cons_enum m2 End)
 
     let equal cmp m1 m2 =

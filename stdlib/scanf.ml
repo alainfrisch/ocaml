@@ -273,9 +273,10 @@ module Scanning : SCANNING = struct
     let len = String.length s in
     let next () =
       if !i >= len then raise End_of_file else
-      let c = s.[!i] in
-      incr i;
-      c in
+        let c = s.[!i] in
+        incr i;
+        c
+    in
     create From_string next
 
 
@@ -512,7 +513,7 @@ let rec check_char ib c =
 and check_this_char ib c =
   let ci = Scanning.checked_peek_char ib in
   if ci = c then Scanning.invalidate_current_char ib else
-  character_mismatch c ci
+    character_mismatch c ci
 
 and check_newline ib =
   let ci = Scanning.checked_peek_char ib in
@@ -612,17 +613,16 @@ let token_int64 conv ib = int64_of_string (token_int_literal conv ib)
 (* The decimal case is treated especially for optimization purposes. *)
 let rec scan_decimal_digit_star width ib =
   if width = 0 then width else
-  let c = Scanning.peek_char ib in
-  if Scanning.eof ib then width else
-  match c with
-  | '0' .. '9' as c ->
-    let width = Scanning.store_char width ib c in
-    scan_decimal_digit_star width ib
-  | '_' ->
-    let width = Scanning.ignore_char width ib in
-    scan_decimal_digit_star width ib
-  | _ -> width
-
+    let c = Scanning.peek_char ib in
+    if Scanning.eof ib then width else
+      match c with
+      | '0' .. '9' as c ->
+          let width = Scanning.store_char width ib c in
+          scan_decimal_digit_star width ib
+      | '_' ->
+          let width = Scanning.ignore_char width ib in
+          scan_decimal_digit_star width ib
+      | _ -> width
 
 let scan_decimal_digit_plus width ib =
   if width = 0 then bad_token_length "decimal digits" else
@@ -642,14 +642,14 @@ let scan_digit_star digitp width ib =
     if width = 0 then width else
     let c = Scanning.peek_char ib in
     if Scanning.eof ib then width else
-    match c with
-    | c when digitp c ->
-      let width = Scanning.store_char width ib c in
-      scan_digits width ib
-    | '_' ->
-      let width = Scanning.ignore_char width ib in
-      scan_digits width ib
-    | _ -> width in
+      match c with
+      | c when digitp c ->
+          let width = Scanning.store_char width ib c in
+          scan_digits width ib
+      | '_' ->
+          let width = Scanning.ignore_char width ib in
+          scan_digits width ib
+      | _ -> width in
   scan_digits width ib
 
 
@@ -657,12 +657,12 @@ let scan_digit_plus basis digitp width ib =
   (* Ensure we have got enough width left,
      and read at list one digit. *)
   if width = 0 then bad_token_length "digits" else
-  let c = Scanning.checked_peek_char ib in
-  if digitp c then
-    let width = Scanning.store_char width ib c in
-    scan_digit_star digitp width ib
-  else
-    bad_input (Printf.sprintf "character %C is not a valid %s digit" c basis)
+    let c = Scanning.checked_peek_char ib in
+    if digitp c then
+      let width = Scanning.store_char width ib c in
+      scan_digit_star digitp width ib
+    else
+      bad_input (Printf.sprintf "character %C is not a valid %s digit" c basis)
 
 
 let is_binary_digit = function

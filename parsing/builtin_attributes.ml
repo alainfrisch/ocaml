@@ -111,6 +111,7 @@ let emit_external_warnings =
      sure to cover all contexts (easier and more ugly alternative:
      duplicate here the logic which control warnings locally). *)
   let open Ast_iterator in
+  let col = ref (-1) in
   {
     default_iterator with
     attribute = (fun _ a ->
@@ -121,7 +122,45 @@ let emit_external_warnings =
                 pstr_loc}] ->
             Location.prerr_warning pstr_loc (Warnings.Preprocessor s)
         | _ -> ()
-      )
+      );
+    expr = (fun this e ->
+        let open Location in
+        let open Lexing in
+        let l = e.pexp_loc.loc_start in
+        let c = l.pos_cnum - l.pos_bol in
+
+        let old_col = !col in
+
+        if not e.pexp_loc.loc_ghost && c <= !col then begin
+          Location.prerr_warning e.pexp_loc (Warnings.Preprocessor (Printf.sprintf "Suspicious identation %i / %i" c !col));
+          col := (-1);
+        end;
+
+        try
+          begin match e.pexp_desc with
+          | Pexp_ifthenelse _ when not e.pexp_loc.loc_ghost ->
+              let rec loop e =
+                match e.pexp_desc with
+                | Pexp_ifthenelse (econd, ethen, Some eelse) ->
+                    this.expr this econd;
+                    col := c;
+                    this.expr this ethen;
+                    col := old_col;
+                    loop eelse
+                | _ ->
+                    col := c;
+                    default_iterator.expr this e;
+                    col := old_col
+              in
+              loop e
+          | _ ->
+              default_iterator.expr this e;
+          end;
+          col := old_col
+        with exn ->
+          col := old_col;
+          raise exn
+      );
   }
 
 

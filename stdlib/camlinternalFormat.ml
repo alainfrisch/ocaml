@@ -2510,18 +2510,18 @@ let fmt_ebb_of_string ?legacy_behavior str =
        Such checks need to be disabled in legacy mode, as the legacy
        parser silently ignored incompatible flags. *)
     if not legacy_behavior then begin
-    if not !plus_used && plus then
-      incompatible_flag pct_ind str_ind symb "'+'";
-    if not !hash_used && hash then
-      incompatible_flag pct_ind str_ind symb "'#'";
-    if not !space_used && space then
-      incompatible_flag pct_ind str_ind symb "' '";
-    if not !pad_used  && Padding_EBB pad <> Padding_EBB No_padding then
-      incompatible_flag pct_ind str_ind symb "`padding'";
-    if not !prec_used && Precision_EBB prec <> Precision_EBB No_precision then
-      incompatible_flag pct_ind str_ind (if ign then '_' else symb)
-        "`precision'";
-    if ign && plus then incompatible_flag pct_ind str_ind '_' "'+'";
+      if not !plus_used && plus then
+        incompatible_flag pct_ind str_ind symb "'+'";
+      if not !hash_used && hash then
+        incompatible_flag pct_ind str_ind symb "'#'";
+      if not !space_used && space then
+        incompatible_flag pct_ind str_ind symb "' '";
+      if not !pad_used  && Padding_EBB pad <> Padding_EBB No_padding then
+        incompatible_flag pct_ind str_ind symb "`padding'";
+      if not !prec_used && Precision_EBB prec <> Precision_EBB No_precision then
+        incompatible_flag pct_ind str_ind (if ign then '_' else symb)
+          "`precision'";
+      if ign && plus then incompatible_flag pct_ind str_ind '_' "'+'";
     end;
     (* this last test must not be disabled in legacy mode,
        as ignoring it would typically result in a different typing
@@ -2604,9 +2604,12 @@ let fmt_ebb_of_string ?legacy_behavior str =
         let Fmt_EBB fmt_rest = parse (ind + 1) end_ind in
         let Fmt_EBB sub_fmt = parse str_ind (ind + 1) in
         let sub_format = Format (sub_fmt, sub_str) in
-        let formatting = if is_open_tag then Open_tag sub_format else (
-          check_open_box sub_fmt;
-          Open_box sub_format) in
+        let formatting =
+          if is_open_tag then Open_tag sub_format else (
+            check_open_box sub_fmt;
+            Open_box sub_format
+          )
+        in
         Fmt_EBB (Formatting_gen (formatting, fmt_rest))
       | _ ->
         raise Not_found

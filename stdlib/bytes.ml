@@ -224,7 +224,7 @@ let index s c = index_rec s (length s) 0 c
 let index_from s i c =
   let l = length s in
   if i < 0 || i > l then invalid_arg "String.index_from / Bytes.index_from" else
-  index_rec s l i c
+    index_rec s l i c
 
 let rec rindex_rec s i c =
   if i < 0 then raise Not_found else

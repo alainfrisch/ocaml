@@ -133,7 +133,7 @@ module Make (H : Hashtbl.HashedType) : (S with type data = H.t) = struct
 
   let rec count_bucket i b accu =
     if i >= length b then accu else
-    count_bucket (i+1) b (accu + (if check b i then 1 else 0))
+      count_bucket (i+1) b (accu + (if check b i then 1 else 0))
 
 
   let count t =

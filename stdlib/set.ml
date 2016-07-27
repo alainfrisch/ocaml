@@ -154,7 +154,7 @@ module Make(Ord: OrderedType) =
       | (Node(ll, lv, lr, lh), Node(rl, rv, rr, rh)) ->
           if lh > rh + 2 then bal ll lv (join lr v r) else
           if rh > lh + 2 then bal (join l v rl) rv rr else
-          create l v r
+            create l v r
 
     (* Smallest and greatest element of a set *)
 
