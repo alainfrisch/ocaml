@@ -1437,7 +1437,7 @@ let transl_type_extension check_open env loc styext =
   reset_type_variables();
   Ctype.begin_def();
   let (type_path, type_decl) =
-    Typetexp.find_type env loc styext.ptyext_path.txt
+    Typetexp.find_type env styext.ptyext_path
   in
   begin
     match type_decl.type_kind with

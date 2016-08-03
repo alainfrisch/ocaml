@@ -124,10 +124,10 @@ let find_component (lookup : ?loc:_ -> _) make_error env loc lid =
   | Env.Recmodule ->
     raise (Error (loc, env, Illegal_reference_to_recursive_module))
 
-let find_type env loc lid =
+let find_type env {loc; txt} =
   let path =
     find_component Env.lookup_type (fun lid -> Unbound_type_constructor lid)
-      env loc lid
+      env loc txt
   in
   let decl = Env.find_type path env in
   Builtin_attributes.check_deprecated loc decl.type_attributes (Path.name path);
@@ -340,7 +340,7 @@ let rec transl_type env policy styp =
     let ty = newty (Ttuple (List.map (fun ctyp -> ctyp.ctyp_type) ctys)) in
     ctyp (Ttyp_tuple ctys) ty
   | Ptyp_constr(lid, stl) ->
-      let (path, decl) = find_type env styp.ptyp_loc lid.txt in
+      let (path, decl) = find_type env lid in
       let stl =
         match stl with
         | [ {ptyp_desc=Ptyp_any} as t ] when decl.type_arity > 1 ->

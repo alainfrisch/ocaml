@@ -538,7 +538,7 @@ let () =
 let () =
   reg_show_prim "show_type"
     (fun env loc id lid ->
-       let _path, desc = Typetexp.find_type env loc lid in
+       let _path, desc = Typetexp.find_type env {Location.loc; txt=lid} in
        [ Sig_type (id, desc, Trec_not) ]
     )
     "Print the signature of the corresponding type constructor."

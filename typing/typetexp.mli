@@ -85,7 +85,7 @@ val create_package_mty:
       Parsetree.module_type
 
 val find_type:
-    Env.t -> Location.t -> Longident.t -> Path.t * type_declaration
+    Env.t -> Longident.t Location.loc -> Path.t * type_declaration
 val find_constructor:
     Env.t -> Location.t -> Longident.t -> constructor_description
 val find_all_constructors:
