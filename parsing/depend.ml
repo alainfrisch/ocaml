@@ -253,6 +253,8 @@ let rec add_expr bv exp =
       let b = add_module_binding bv m in
       add_expr (StringMap.add id.txt b bv) e
   | Pexp_letexception(_, e) -> add_expr bv e
+  | Pexp_lettype _ ->
+        assert false (* TODO *)
   | Pexp_assert (e) -> add_expr bv e
   | Pexp_lazy (e) -> add_expr bv e
   | Pexp_poly (e, t) -> add_expr bv e; add_opt add_type bv t

@@ -131,6 +131,8 @@ and exp_extra =
         (** Used for method bodies. *)
   | Texp_newtype of string
         (** fun (type t) ->  *)
+  | Texp_lettype of rec_flag * type_declaration list
+        (** let type ... in E *)
 
 and expression_desc =
     Texp_ident of Path.t * Longident.t loc * Types.value_description

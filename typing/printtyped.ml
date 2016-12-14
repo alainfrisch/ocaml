@@ -280,6 +280,8 @@ and expression_extra i ppf x attrs =
   | Texp_newtype s ->
       line i ppf "Texp_newtype \"%s\"\n" s;
       attributes i ppf attrs;
+  | Texp_lettype _ ->
+      assert false (* TODO *)
 
 and expression i ppf x =
   line i ppf "expression %a\n" fmt_location x.exp_loc;

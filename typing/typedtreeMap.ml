@@ -410,6 +410,7 @@ module MakeMap(Map : MapArgument) = struct
       | Texp_newtype _
       | Texp_open _
       | Texp_poly None -> exp_extra
+      | Texp_lettype _ -> assert false (* TODO *)
 
 
   and map_package_type pack =

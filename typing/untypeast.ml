@@ -332,6 +332,7 @@ let exp_extra sub (extra, loc, attrs) sexp =
         Pexp_open (ovf, map_loc sub lid, sexp)
     | Texp_poly cto -> Pexp_poly (sexp, map_opt (sub.typ sub) cto)
     | Texp_newtype s -> Pexp_newtype (mkloc s loc, sexp)
+    | Texp_lettype (rf, tys) -> Pexp_lettype (rf, List.map (sub.type_declaration sub) tys, sexp)
   in
   Exp.mk ~loc ~attrs desc
 

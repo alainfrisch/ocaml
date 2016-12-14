@@ -220,6 +220,7 @@ let expr sub x =
         Texp_open (ovf, path, loc, sub.env sub env)
     | Texp_newtype _ as d -> d
     | Texp_poly cto -> Texp_poly (opt (sub.typ sub) cto)
+    | Texp_lettype _ -> assert false (* TODO *)
   in
   let exp_extra = List.map (tuple3 extra id id) x.exp_extra in
   let exp_env = sub.env sub x.exp_env in

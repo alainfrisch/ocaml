@@ -72,6 +72,7 @@ and exp_extra =
   | Texp_open of override_flag * Path.t * Longident.t loc * Env.t
   | Texp_poly of core_type option
   | Texp_newtype of string
+  | Texp_lettype of rec_flag * type_declaration list
 
 and expression_desc =
     Texp_ident of Path.t * Longident.t loc * Types.value_description

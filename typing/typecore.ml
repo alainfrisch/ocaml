@@ -162,6 +162,7 @@ let iter_expression f e =
     | Pexp_send (e, _)
     | Pexp_constraint (e, _)
     | Pexp_coerce (e, _, _)
+    | Pexp_lettype (_, _, e)
     | Pexp_letexception (_, e)
     | Pexp_field (e, _) -> expr e
     | Pexp_while (e1, e2)
@@ -2819,6 +2820,15 @@ and type_expect_ ?in_function ?(recarg=Rejected) env sexp ty_expected =
         exp_type = body.exp_type;
         exp_attributes = sexp.pexp_attributes;
         exp_env = env }
+
+  | Pexp_lettype (rec_flag, sdecls, sbody) ->
+      (* TODO: check unicity of the type names in this decl *)
+      let (decls, newenv) = Typedecl.transl_type_decl env rec_flag sdecls in
+      let body = type_expect newenv sbody ty_expected in
+      re { body with
+           exp_extra =(Texp_lettype (rec_flag, decls), loc, sexp.pexp_attributes) :: body.exp_extra
+         }
+
 
   | Pexp_assert (e) ->
       let cond = type_expect env e Predef.type_bool in

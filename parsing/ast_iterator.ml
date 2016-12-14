@@ -358,6 +358,9 @@ module E = struct
     | Pexp_letexception (cd, e) ->
         sub.extension_constructor sub cd;
         sub.expr sub e
+    | Pexp_lettype (_rf, tys, e) ->
+        List.iter (sub.type_declaration sub) tys;
+        sub.expr sub e
     | Pexp_assert e -> sub.expr sub e
     | Pexp_lazy e -> sub.expr sub e
     | Pexp_poly (e, t) ->

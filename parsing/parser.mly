@@ -1369,6 +1369,8 @@ expr:
       { mkexp_attrs (Pexp_letmodule(mkrhs $4 4, $5, $7)) $3 }
   | LET EXCEPTION ext_attributes let_exception_declaration IN seq_expr
       { mkexp_attrs (Pexp_letexception($4, $6)) $3 }
+  | LET type_declarations IN seq_expr
+      { let (rf, tys, ext) = $2 in mkexp_attrs (Pexp_lettype (rf, tys, $4)) (ext, []) }
   | LET OPEN override_flag ext_attributes mod_longident IN seq_expr
       { mkexp_attrs (Pexp_open($3, mkrhs $5 5, $7)) $4 }
   | FUNCTION ext_attributes opt_bar match_cases
