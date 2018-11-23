@@ -39,7 +39,7 @@ module IntMap = Map.Make(Int)
 
 type env = {
   unboxed_ids : (V.t * boxed_number) V.tbl;
-  catch_types : boxed_number option list IntMap.t;
+  catch_types : ((Clambda.ulambda * Cmm.expression) list -> unit) IntMap.t;
   environment_param : V.t option;
 }
 
@@ -71,8 +71,7 @@ let add_catch_types i typs env =
   }
 
 let catch_types i env =
-  try IntMap.find i env.catch_types
-  with Not_found -> []
+  IntMap.find_opt i env.catch_types
 
 (* Local binding of complex expressions *)
 
@@ -1640,6 +1639,29 @@ let unboxed_number_kind_of_unbox dbg = function
   | Unboxed_integer bi -> Boxed (Boxed_integer (bi, dbg), false)
   | Untagged_int -> No_unboxing
 
+let join_unboxed_number_kind ~strict k1 k2 =
+  match k1, k2 with
+  | Boxed (b1, c1), Boxed (b2, c2) when equal_boxed_number b1 b2 ->
+      Boxed (b1, c1 && c2)
+  | No_result, k | k, No_result ->
+        k (* if a branch never returns, it is safe to unbox it *)
+  | No_unboxing, k | k, No_unboxing when not strict ->
+      k
+  | _, _ -> No_unboxing
+
+let is_unboxed_number_cmm ~strict cmm =
+  let r = ref No_result in
+  let rec aux = function
+    | Cop(Calloc, [Cblockheader (header, _); _], dbg) when header = float_header ->
+        print_endline "XXX";
+        r := join_unboxed_number_kind ~strict !r (Boxed (Boxed_float dbg, false))
+    | l ->
+        if not (Cmm.iter_shallow_tail aux l) then
+          r := join_unboxed_number_kind ~strict !r No_unboxing
+  in
+  aux cmm;
+  !r
+
 let rec is_unboxed_number ~strict env e =
   (* Given unboxed_number_kind from two branches of the code, returns the
      resulting unboxed_number_kind.
@@ -1653,14 +1675,7 @@ let rec is_unboxed_number ~strict env e =
      be the case in presence of GADTs.
  *)
   let join k1 e =
-    match k1, is_unboxed_number ~strict env e with
-    | Boxed (b1, c1), Boxed (b2, c2) when equal_boxed_number b1 b2 ->
-        Boxed (b1, c1 && c2)
-    | No_result, k | k, No_result ->
-        k (* if a branch never returns, it is safe to unbox it *)
-    | No_unboxing, k | k, No_unboxing when not strict ->
-        k
-    | _, _ -> No_unboxing
+    join_unboxed_number_kind ~strict k1 (is_unboxed_number ~strict env e)
   in
   match e with
   | Uvar id ->
@@ -1976,19 +1991,12 @@ let rec transl env e =
           strmatch_compile dbg arg (Misc.may_map (transl env) d)
             (List.map (fun (s,act) -> s,transl env act) sw))
   | Ustaticfail (nfail, args) ->
-      let typs = catch_types nfail env in
-      let dbg = Debuginfo.none in
-      assert(List.length typs = List.length args);
-      let args =
-        List.map2
-          (fun arg typ ->
-             match typ with
-             | None -> transl env arg
-             | Some bn -> transl_unbox_number dbg env bn arg
-          )
-          args typs
-      in
-      Cexit (nfail, args)
+      let cargs = List.map (transl env) args in
+      begin match catch_types nfail env with
+      | Some f -> f (List.combine args cargs)
+      | None -> ()
+      end;
+      Cexit (nfail, cargs)
   | Ucatch(nfail, [], body, handler) ->
       make_catch nfail (transl env body) (transl env handler)
   | Ucatch(nfail, ids, body, handler) ->
@@ -2053,6 +2061,45 @@ let rec transl env e =
       Cop(Cload (Word_int, Mutable), [Cconst_int 0], dbg)
 
 and transl_catch env nfail ids body handler =
+  let ids = List.map (fun (id, kind) -> (id, kind, ref No_result)) ids in
+  let report args =
+    List.iter2
+      (fun (id, kind, u) (e, c) ->
+         Format.printf "%s -> %a // %a@;" (VP.name id)
+           Printclambda.clambda e
+           Printcmm.expression c
+         ;
+         let strict = match kind with Pfloatval | Pboxedintval _ -> false | _ -> true in
+         u := join_unboxed_number_kind ~strict !u (is_unboxed_number_cmm ~strict c)
+      )
+      ids args
+  in
+  let env_body = add_catch_types nfail report env in
+  let body =
+    transl env_body body
+  in
+  Format.printf "exit %i:@." nfail;
+  List.iteri
+    (fun i (id, k, u) ->
+       Format.printf "%i %s %a: "
+         i
+         (VP.name id)
+         Printlambda.value_kind k;
+       match !u with
+       | Boxed _ -> Format.printf "Boxed@."
+       | No_result -> Format.printf "No_result@."
+       | No_unboxing -> Format.printf "No_unboxing@."
+    )
+    ids;
+  ccatch
+    (nfail,
+     List.map (fun (id, _, _) -> id, Cmm.typ_val) ids,
+     body,
+     transl env handler
+    )
+
+
+(*
   let env_handler, typs, ids_with_types =
     List.fold_right
       (fun (id, k) (env, typs, ids) ->
@@ -2078,7 +2125,7 @@ and transl_catch env nfail ids body handler =
      transl env_body body,
      transl env_handler handler
     )
-
+*)
 and transl_make_array dbg env kind args =
   match kind with
   | Pgenarray ->

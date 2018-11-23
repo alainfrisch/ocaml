@@ -220,3 +220,17 @@ let ccatch (i, ids, e1, e2)=
 
 let reset () =
   label_counter := 99
+
+
+let iter_shallow_tail f = function
+  | Clet(_id, _exp, body) -> f body; true
+  | Cifthenelse(_cond, e1, e2) -> f e1; f e2; true
+  | Csequence(_e1, e2) -> f e2; true
+  | Cswitch(_e, _tbl, el, _dbg') -> Array.iter f el; true
+  | Ccatch(_rec_flag, handlers, body) ->
+      List.iter (fun (_, _, h) -> f h) handlers;
+      f body;
+      true
+  | Ctrywith(e1, _id, e2) -> f e1; f e2; true
+  | Cexit _ -> true
+  | _ -> false

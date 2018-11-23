@@ -219,3 +219,5 @@ val ccatch :
   -> expression
 
 val reset : unit -> unit
+
+val iter_shallow_tail: (expression -> unit) -> expression -> bool
