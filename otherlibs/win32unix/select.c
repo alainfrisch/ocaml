@@ -406,11 +406,18 @@ void read_pipe_poll (HANDLE hStop, void *_data)
   DWORD         i;
   DWORD         wait;
 
+  LARGE_INTEGER counter_start, counter;
+  __int64 interval;
+
+  QueryPerformanceFrequency(&counter);
+  interval = (double)counter.QuadPart * 0.064;
+  QueryPerformanceCounter(&counter_start);
+
   /* Poll pipe */
   event = 0;
   n = 0;
   lpSelectData = (LPSELECTDATA)_data;
-  wait = 1;
+  wait = 0;
 
   DEBUG_PRINT("Checking data pipe");
   while (lpSelectData->EState == SELECT_STATE_NONE)
@@ -441,26 +448,27 @@ void read_pipe_poll (HANDLE hStop, void *_data)
     };
 
     /* Alas, nothing except polling seems to work for pipes.
-       Check the state & stop_worker_event every 10 ms
      */
     if (lpSelectData->EState == SELECT_STATE_NONE)
     {
-      event = WaitForSingleObject(hStop, wait);
+      if (wait == 0) {
+        /* For about 64ms, use a 0 timeout (busy polling).
+           After that, switch to 15ms (usually rounded up to the RTC clock at 16ms).
+        */
+        QueryPerformanceCounter(&counter);
+        if (counter.QuadPart - counter_start.QuadPart > interval)
+          wait = 15;
+      }
 
-      /* Fast start: begin to wait 1, 2, 4, 8 and then 10 ms.
-       * If we are working with the output of a program there is
-       * a chance that one of the 4 first calls succeed.
-       */
-      wait = 2 * wait;
-      if (wait > 10)
-      {
-        wait = 10;
-      };
+      event = WaitForSingleObject(hStop, wait);
       if (event == WAIT_OBJECT_0
           || check_error(lpSelectData, event == WAIT_FAILED))
       {
         break;
       }
+
+      /* Hint for the OS to schedule another thread/process */
+      Sleep(0);
     }
   }
   DEBUG_PRINT("Finish checking data on pipe");
