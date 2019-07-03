@@ -230,7 +230,7 @@ module IdTbl =
           (** The table before opening the module. *)
         }
 
-      | Map of {
+      | Copy of {
           f: ('a -> 'a);
           (** A postprocessing function applied to the result of each lookup.
               In case of nested [Map], only the outermost mapping function
@@ -260,19 +260,13 @@ module IdTbl =
         layer = Open {using; root; components; next};
       }
 
-    let map f next =
-      {
-        current = Ident.empty;
-        layer = Map {f; next}
-      }
-
     let rec find_same ~map id tbl =
       try Ident.find_same id tbl.current
       with Not_found as exn ->
         begin match tbl.layer with
         | Open {next; _} -> find_same ~map id next
-        | Map {f; next} when map -> f (find_same ~map:false id next)
-        | Map {f = _; next} -> find_same ~map id next
+        | Copy {f; next} when map -> f (find_same ~map:false id next)
+        | Copy {f = _; next} -> find_same ~map id next
         | Nothing -> raise exn
         end
 
@@ -300,10 +294,10 @@ module IdTbl =
             with Not_found ->
               find_name ~map ~mark name next
             end
-        | Map {f; next} when map ->
+        | Copy {f; next} when map ->
             let (p, desc) =  find_name ~mark ~map:false name next in
             p, f desc
-        | Map {f = _; next} ->
+        | Copy {f = _; next} ->
             find_name ~mark ~map name next
         | Nothing ->
             raise exn
@@ -324,10 +318,10 @@ module IdTbl =
           with Not_found ->
             find_all ~map name next
           end
-      | Map {f; next} when map ->
+      | Copy {f; next} when map ->
           List.map (fun (p, desc) -> (p, f desc))
             (find_all ~map:false name next)
-      | Map {f = _; next} ->
+      | Copy {f = _; next} ->
           find_all ~map name next
 
     let find_all name tbl = find_all ~map:true name tbl
@@ -347,10 +341,10 @@ module IdTbl =
           |> fold_name ~map f next
       | Nothing ->
           acc
-      | Map {f = g; next} when map ->
+      | Copy {f = g; next} when map ->
           acc
           |> fold_name ~map:false (fun name (path, desc) -> f name (path, g desc)) next
-      | Map {f = _; next} ->
+      | Copy {f = _; next} ->
           fold_name ~map f next acc
 
     let fold_name f tbl acc = fold_name ~map:true f tbl acc
@@ -358,7 +352,7 @@ module IdTbl =
     let rec local_keys tbl acc =
       let acc = Ident.fold_all (fun k _ accu -> k::accu) tbl.current acc in
       match tbl.layer with
-      | Open {next; _ } | Map {next; _} -> local_keys next acc
+      | Open {next; _ } | Copy {next; _} -> local_keys next acc
       | Nothing -> acc
 
 
@@ -373,9 +367,9 @@ module IdTbl =
                 (Pdot (root, s), x))
             components;
           iter ~map f next
-      | Map {f = g; next} when map ->
+      | Copy {f = g; next} when map ->
           iter ~map:false (fun id (path, desc) -> f id (path, g desc)) next
-      | Map {f = _; next} ->
+      | Copy {f = _; next} ->
           iter ~map f next
       | Nothing -> ()
 
@@ -1259,8 +1253,11 @@ let make_copy_of_types env0 =
   let f (desc, addr) =
     {desc with val_type = copy desc.val_type}, addr
   in
-  let values =
-    IdTbl.map f env0.values
+  let values : _ IdTbl.t =
+    {
+      current = Ident.empty;
+      layer = Copy {f; next = env0.values}
+    }
   in
   (fun env ->
      if env.values != env0.values then fatal_error "Env.make_copy_of_types";
