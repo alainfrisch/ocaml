@@ -232,6 +232,10 @@ module IdTbl =
 
       | Map of {
           f: ('a -> 'a);
+          (** A postprocessing function applied to the result of each lookup.
+              In case of nested [Map], only the outermost mapping function
+              is applied. *)
+
           next: 'a t;
         }
 
@@ -262,16 +266,19 @@ module IdTbl =
         layer = Map {f; next}
       }
 
-    let rec find_same id tbl =
+    let rec find_same ~map id tbl =
       try Ident.find_same id tbl.current
       with Not_found as exn ->
         begin match tbl.layer with
-        | Open {next; _} -> find_same id next
-        | Map {f; next} -> f (find_same id next)
+        | Open {next; _} -> find_same ~map id next
+        | Map {f; next} when map -> f (find_same ~map:false id next)
+        | Map {f = _; next} -> find_same ~map id next
         | Nothing -> raise exn
         end
 
-    let rec find_name ~mark name tbl =
+    let find_same id tbl = find_same ~map:true id tbl
+
+    let rec find_name ~map ~mark name tbl =
       try
         let (id, desc) = Ident.find_name name tbl.current in
         Pident id, desc
@@ -284,23 +291,27 @@ module IdTbl =
               if mark then begin match using with
               | None -> ()
               | Some f -> begin
-                  match find_name ~mark:false name next with
+                  match find_name ~map ~mark:false name next with
                   | exception Not_found -> f name None
                   | _, descr' -> f name (Some (descr', descr))
                 end
               end;
               res
             with Not_found ->
-              find_name ~mark name next
+              find_name ~map ~mark name next
             end
-        | Map {f; next} ->
-            let (p, desc) =  find_name ~mark name next in
+        | Map {f; next} when map ->
+            let (p, desc) =  find_name ~mark ~map:false name next in
             p, f desc
+        | Map {f = _; next} ->
+            find_name ~mark ~map name next
         | Nothing ->
             raise exn
         end
 
-    let rec find_all name tbl =
+    let find_name ~mark name tbl = find_name ~map:true ~mark name tbl
+
+    let rec find_all ~map name tbl =
       List.map
         (fun (id, desc) -> Pident id, desc)
         (Ident.find_all name tbl.current) @
@@ -309,15 +320,19 @@ module IdTbl =
       | Open {root; using = _; next; components} ->
           begin try
             let desc = NameMap.find name components in
-            (Pdot (root, name), desc) :: find_all name next
+            (Pdot (root, name), desc) :: find_all ~map name next
           with Not_found ->
-            find_all name next
+            find_all ~map name next
           end
-      | Map {f; next} ->
+      | Map {f; next} when map ->
           List.map (fun (p, desc) -> (p, f desc))
-            (find_all name next)
+            (find_all ~map:false name next)
+      | Map {f = _; next} ->
+          find_all ~map name next
 
-    let rec fold_name f tbl acc =
+    let find_all name tbl = find_all ~map:true name tbl
+
+    let rec fold_name ~map f tbl acc =
       let acc =
         Ident.fold_name
           (fun id d -> f (Ident.name id) (Pident id, d))
@@ -329,12 +344,16 @@ module IdTbl =
           |> NameMap.fold
             (fun name desc -> f name (Pdot (root, name), desc))
             components
-          |> fold_name f next
+          |> fold_name ~map f next
       | Nothing ->
           acc
-      | Map {f=g; next} ->
+      | Map {f = g; next} when map ->
           acc
-          |> fold_name (fun name (path, desc) -> f name (path, g desc)) next
+          |> fold_name ~map:false (fun name (path, desc) -> f name (path, g desc)) next
+      | Map {f = _; next} ->
+          fold_name ~map f next acc
+
+    let fold_name f tbl acc = fold_name ~map:true f tbl acc
 
     let rec local_keys tbl acc =
       let acc = Ident.fold_all (fun k _ accu -> k::accu) tbl.current acc in
@@ -343,7 +362,7 @@ module IdTbl =
       | Nothing -> acc
 
 
-    let rec iter f tbl =
+    let rec iter ~map f tbl =
       Ident.iter (fun id desc -> f id (Pident id, desc)) tbl.current;
       match tbl.layer with
       | Open {root; using = _; next; components} ->
@@ -353,10 +372,14 @@ module IdTbl =
               f (Ident.create_scoped ~scope:root_scope s)
                 (Pdot (root, s), x))
             components;
-          iter f next
-      | Map {f=g; next} ->
-          iter (fun id (path, desc) -> f id (path, g desc)) next
+          iter ~map f next
+      | Map {f = g; next} when map ->
+          iter ~map:false (fun id (path, desc) -> f id (path, g desc)) next
+      | Map {f = _; next} ->
+          iter ~map f next
       | Nothing -> ()
+
+    let iter f tbl = iter ~map:true f tbl
 
     let diff_keys tbl1 tbl2 =
       let keys2 = local_keys tbl2 [] in
