@@ -76,20 +76,21 @@ type module_unbound_reason =
 
 type summary =
     Env_empty
-  | Env_value of summary * Ident.t * value_description
-  | Env_type of summary * Ident.t * type_declaration
-  | Env_extension of summary * Ident.t * extension_constructor
-  | Env_module of summary * Ident.t * module_presence * module_declaration
-  | Env_modtype of summary * Ident.t * modtype_declaration
-  | Env_class of summary * Ident.t * class_declaration
-  | Env_cltype of summary * Ident.t * class_type_declaration
-  | Env_open of summary * Path.t
-  | Env_functor_arg of summary * Ident.t
-  | Env_constraints of summary * type_declaration Path.Map.t
-  | Env_copy_types of summary
-  | Env_persistent of summary * Ident.t
-  | Env_value_unbound of summary * string * value_unbound_reason
-  | Env_module_unbound of summary * string * module_unbound_reason
+  | Env_value of {mutable next: summary; id: Ident.t; desc: value_description}
+  | Env_type of {mutable next: summary; id: Ident.t; desc: type_declaration}
+  | Env_extension of {mutable next: summary; id: Ident.t; desc: extension_constructor}
+  | Env_module of
+      {mutable next: summary; id: Ident.t; presence:module_presence; desc: module_declaration}
+  | Env_modtype of {mutable next: summary; id: Ident.t; desc: modtype_declaration}
+  | Env_class of {mutable next: summary; id: Ident.t; desc: class_declaration}
+  | Env_cltype of {mutable next: summary; id: Ident.t; desc: class_type_declaration}
+  | Env_open of {mutable next: summary; path: Path.t}
+  | Env_functor_arg of {mutable next: summary; id: Ident.t}
+  | Env_constraints of {mutable next: summary; constrs: type_declaration Path.Map.t}
+  | Env_copy_types of {mutable next: summary}
+  | Env_persistent of {mutable next: summary; id: Ident.t}
+  | Env_value_unbound of {mutable next: summary; name:string; reason:value_unbound_reason}
+  | Env_module_unbound of {mutable next: summary; name:string; reason:module_unbound_reason}
 
 type address =
   | Aident of Ident.t
@@ -698,7 +699,7 @@ let add_persistent_structure id env =
   if not (Current_unit_name.is_name_of id) then
     { env with
       modules = IdTbl.add id Mod_persistent env.modules;
-      summary = Env_persistent (env.summary, id);
+      summary = Env_persistent {next=env.summary; id};
     }
   else
     env
@@ -1193,7 +1194,7 @@ let make_copy_of_types env0 =
   in
   (fun env ->
      if env.values != env0.values then fatal_error "Env.make_copy_of_types";
-     {env with values; summary = Env_copy_types env.summary}
+     {env with values; summary = Env_copy_types {next=env.summary}}
   )
 
 (* Helper to handle optional substitutions. *)
@@ -1625,13 +1626,13 @@ and check_value_name name loc =
         error (Illegal_value_name(loc, name))
     done
 
-and store_value ?check id addr decl env =
-  check_value_name (Ident.name id) decl.val_loc;
-  Option.iter (fun f -> check_usage decl.val_loc id f value_declarations) check;
-  let vda = { vda_description = decl; vda_address = addr } in
+and store_value ?check id addr desc env =
+  check_value_name (Ident.name id) desc.val_loc;
+  Option.iter (fun f -> check_usage desc.val_loc id f value_declarations) check;
+  let vda = { vda_description = desc; vda_address = addr } in
   { env with
     values = IdTbl.add id (Val_bound vda) env.values;
-    summary = Env_value(env.summary, id, decl) }
+    summary = Env_value{next=env.summary; id; desc} }
 
 and store_type ~check id info env =
   let loc = info.type_loc in
@@ -1678,7 +1679,7 @@ and store_type ~check id info env =
         (fun (id, descr) labels -> TycompTbl.add id descr labels)
         labels env.labels;
     types = IdTbl.add id tda env.types;
-    summary = Env_type(env.summary, id, info) }
+    summary = Env_type{next=env.summary; id; desc=info} }
 
 and store_type_infos id info env =
   (* Simplified version of store_type that doesn't compute and store
@@ -1689,7 +1690,7 @@ and store_type_infos id info env =
   let tda = { tda_declaration = info; tda_descriptions = [], [] } in
   { env with
     types = IdTbl.add id tda env.types;
-    summary = Env_type(env.summary, id, info) }
+    summary = Env_type{next=env.summary; id; desc=info} }
 
 and store_extension ~check id addr ext env =
   let loc = ext.ext_loc in
@@ -1718,7 +1719,7 @@ and store_extension ~check id addr ext env =
   end;
   { env with
     constrs = TycompTbl.add id cda env.constrs;
-    summary = Env_extension(env.summary, id, ext) }
+    summary = Env_extension{next=env.summary; id; desc=ext} }
 
 and store_module ~check ~freshening_sub id addr presence md env =
   let loc = md.md_loc in
@@ -1742,23 +1743,23 @@ and store_module ~check ~freshening_sub id addr presence md env =
   in
   { env with
     modules = IdTbl.add id (Mod_local mda) env.modules;
-    summary = Env_module(env.summary, id, presence, md) }
+    summary = Env_module{next=env.summary; id; presence; desc=md} }
 
 and store_modtype id info env =
   { env with
     modtypes = IdTbl.add id info env.modtypes;
-    summary = Env_modtype(env.summary, id, info) }
+    summary = Env_modtype{next=env.summary; id; desc=info} }
 
 and store_class id addr desc env =
   let clda = { clda_declaration = desc; clda_address = addr } in
   { env with
     classes = IdTbl.add id clda env.classes;
-    summary = Env_class(env.summary, id, desc) }
+    summary = Env_class{next=env.summary; id; desc} }
 
 and store_cltype id desc env =
   { env with
     cltypes = IdTbl.add id desc env.cltypes;
-    summary = Env_cltype(env.summary, id, desc) }
+    summary = Env_cltype{next=env.summary; id; desc} }
 
 let scrape_alias env mty = scrape_alias env None mty
 
@@ -1801,7 +1802,7 @@ let _ =
 let add_functor_arg id env =
   {env with
    functor_args = Ident.add id () env.functor_args;
-   summary = Env_functor_arg (env.summary, id)}
+   summary = Env_functor_arg {next=env.summary; id}}
 
 let add_value ?check id desc env =
   let addr = value_declaration_address env id desc in
@@ -1907,13 +1908,13 @@ let enter_unbound_value name reason env =
   let id = Ident.create_local name in
   { env with
     values = IdTbl.add id (Val_unbound reason) env.values;
-    summary = Env_value_unbound(env.summary, name, reason) }
+    summary = Env_value_unbound{next=env.summary; name; reason} }
 
 let enter_unbound_module name reason env =
   let id = Ident.create_local name in
   { env with
     modules = IdTbl.add id (Mod_unbound reason) env.modules;
-    summary = Env_module_unbound(env.summary, name, reason) }
+    summary = Env_module_unbound{next=env.summary; name; reason} }
 
 (* Open a signature path *)
 
@@ -1947,7 +1948,7 @@ let add_components slot root env0 comps =
     add (fun x -> `Module x) comps.comp_modules env0.modules
   in
   { env0 with
-    summary = Env_open(env0.summary, root);
+    summary = Env_open{next=env0.summary;path=root};
     constrs;
     labels;
     values;
@@ -2915,37 +2916,37 @@ let filter_non_loaded_persistent f env =
     else
       match summary with
       | Env_empty -> summary
-      | Env_value (s, id, vd) ->
-          Env_value (filter_summary s ids, id, vd)
-      | Env_type (s, id, td) ->
-          Env_type (filter_summary s ids, id, td)
-      | Env_extension (s, id, ec) ->
-          Env_extension (filter_summary s ids, id, ec)
-      | Env_module (s, id, mp, md) ->
-          Env_module (filter_summary s ids, id, mp, md)
-      | Env_modtype (s, id, md) ->
-          Env_modtype (filter_summary s ids, id, md)
-      | Env_class (s, id, cd) ->
-          Env_class (filter_summary s ids, id, cd)
-      | Env_cltype (s, id, ctd) ->
-          Env_cltype (filter_summary s ids, id, ctd)
-      | Env_open (s, p) ->
-          Env_open (filter_summary s ids, p)
-      | Env_functor_arg (s, id) ->
-          Env_functor_arg (filter_summary s ids, id)
-      | Env_constraints (s, cstrs) ->
-          Env_constraints (filter_summary s ids, cstrs)
-      | Env_copy_types s ->
-          Env_copy_types (filter_summary s ids)
-      | Env_persistent (s, id) ->
+      | Env_value x ->
+          Env_value {x with next=filter_summary x.next ids}
+      | Env_type x ->
+          Env_type {x with next=filter_summary x.next ids}
+      | Env_extension x ->
+          Env_extension {x with next=filter_summary x.next ids}
+      | Env_module x ->
+          Env_module {x with next=filter_summary x.next ids}
+      | Env_modtype x ->
+          Env_modtype {x with next=filter_summary x.next ids}
+      | Env_class x ->
+          Env_class {x with next=filter_summary x.next ids}
+      | Env_cltype x ->
+          Env_cltype {x with next=filter_summary x.next ids}
+      | Env_open x ->
+          Env_open {x with next=filter_summary x.next ids}
+      | Env_functor_arg x ->
+          Env_functor_arg {x with next=filter_summary x.next ids}
+      | Env_constraints x ->
+          Env_constraints {x with next=filter_summary x.next ids}
+      | Env_copy_types x ->
+          Env_copy_types {next=filter_summary x.next ids}
+      | Env_persistent {next; id} ->
           if String.Set.mem (Ident.name id) ids then
-            filter_summary s (String.Set.remove (Ident.name id) ids)
+            filter_summary next (String.Set.remove (Ident.name id) ids)
           else
-            Env_persistent (filter_summary s ids, id)
-      | Env_value_unbound (s, n, r) ->
-          Env_value_unbound (filter_summary s ids, n, r)
-      | Env_module_unbound (s, n, r) ->
-          Env_module_unbound (filter_summary s ids, n, r)
+            Env_persistent {next=filter_summary next ids; id}
+      | Env_value_unbound x ->
+          Env_value_unbound {x with next=filter_summary x.next ids}
+      | Env_module_unbound x ->
+          Env_module_unbound {x with next=filter_summary x.next ids}
   in
   { env with
     modules = remove_ids env.modules to_remove;
@@ -2956,7 +2957,7 @@ let filter_non_loaded_persistent f env =
 
 let summary env =
   if Path.Map.is_empty env.local_constraints then env.summary
-  else Env_constraints (env.summary, env.local_constraints)
+  else Env_constraints {next=env.summary; constrs=env.local_constraints}
 
 let last_env = ref empty
 let last_reduced_env = ref empty

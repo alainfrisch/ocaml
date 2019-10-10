@@ -27,24 +27,23 @@ type value_unbound_reason =
 type module_unbound_reason =
   | Mod_unbound_illegal_recursion
 
-type summary =
+type summary = private
     Env_empty
-  | Env_value of summary * Ident.t * value_description
-  | Env_type of summary * Ident.t * type_declaration
-  | Env_extension of summary * Ident.t * extension_constructor
-  | Env_module of summary * Ident.t * module_presence * module_declaration
-  | Env_modtype of summary * Ident.t * modtype_declaration
-  | Env_class of summary * Ident.t * class_declaration
-  | Env_cltype of summary * Ident.t * class_type_declaration
-  | Env_open of summary * Path.t
-  (** The string set argument of [Env_open] represents a list of module names
-      to skip, i.e. that won't be imported in the toplevel namespace. *)
-  | Env_functor_arg of summary * Ident.t
-  | Env_constraints of summary * type_declaration Path.Map.t
-  | Env_copy_types of summary
-  | Env_persistent of summary * Ident.t
-  | Env_value_unbound of summary * string * value_unbound_reason
-  | Env_module_unbound of summary * string * module_unbound_reason
+  | Env_value of {mutable next: summary; id: Ident.t; desc: value_description}
+  | Env_type of {mutable next: summary; id: Ident.t; desc: type_declaration}
+  | Env_extension of {mutable next: summary; id: Ident.t; desc: extension_constructor}
+  | Env_module of
+      {mutable next: summary; id: Ident.t; presence:module_presence; desc: module_declaration}
+  | Env_modtype of {mutable next: summary; id: Ident.t; desc: modtype_declaration}
+  | Env_class of {mutable next: summary; id: Ident.t; desc: class_declaration}
+  | Env_cltype of {mutable next: summary; id: Ident.t; desc: class_type_declaration}
+  | Env_open of {mutable next: summary; path: Path.t}
+  | Env_functor_arg of {mutable next: summary; id: Ident.t}
+  | Env_constraints of {mutable next: summary; constrs: type_declaration Path.Map.t}
+  | Env_copy_types of {mutable next: summary}
+  | Env_persistent of {mutable next: summary; id: Ident.t}
+  | Env_value_unbound of {mutable next: summary; name:string; reason:value_unbound_reason}
+  | Env_module_unbound of {mutable next: summary; name:string; reason:module_unbound_reason}
 
 type address =
   | Aident of Ident.t
