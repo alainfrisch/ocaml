@@ -45,6 +45,22 @@ type summary = private
   | Env_value_unbound of {mutable next: summary; name:string; reason:value_unbound_reason}
   | Env_module_unbound of {mutable next: summary; name:string; reason:module_unbound_reason}
 
+  | Env_value_ of {mutable next: summary; id: Ident.t; desc: value_description}
+  | Env_type_ of {mutable next: summary; id: Ident.t; desc: type_declaration}
+  | Env_extension_ of {mutable next: summary; id: Ident.t; desc: extension_constructor}
+  | Env_module_ of
+      {mutable next: summary; id: Ident.t; presence:module_presence; desc: module_declaration}
+  | Env_modtype_ of {mutable next: summary; id: Ident.t; desc: modtype_declaration}
+  | Env_class_ of {mutable next: summary; id: Ident.t; desc: class_declaration}
+  | Env_cltype_ of {mutable next: summary; id: Ident.t; desc: class_type_declaration}
+  | Env_open_ of {mutable next: summary; path: Path.t}
+  | Env_functor_arg_ of {mutable next: summary; id: Ident.t}
+  | Env_constraints_ of {mutable next: summary; constrs: type_declaration Path.Map.t}
+  | Env_copy_types_ of {mutable next: summary}
+  | Env_persistent_ of {mutable next: summary; id: Ident.t}
+  | Env_value_unbound_ of {mutable next: summary; name:string; reason:value_unbound_reason}
+  | Env_module_unbound_ of {mutable next: summary; name:string; reason:module_unbound_reason}
+
 type address =
   | Aident of Ident.t
   | Adot of address * int

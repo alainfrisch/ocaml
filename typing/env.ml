@@ -91,6 +91,22 @@ type summary =
   | Env_persistent of {mutable next: summary; id: Ident.t}
   | Env_value_unbound of {mutable next: summary; name:string; reason:value_unbound_reason}
   | Env_module_unbound of {mutable next: summary; name:string; reason:module_unbound_reason}
+(* Constructors below for summaries stripped of unused persistent id *)
+  | Env_value_ of {mutable next: summary; id: Ident.t; desc: value_description}
+  | Env_type_ of {mutable next: summary; id: Ident.t; desc: type_declaration}
+  | Env_extension_ of {mutable next: summary; id: Ident.t; desc: extension_constructor}
+  | Env_module_ of
+      {mutable next: summary; id: Ident.t; presence:module_presence; desc: module_declaration}
+  | Env_modtype_ of {mutable next: summary; id: Ident.t; desc: modtype_declaration}
+  | Env_class_ of {mutable next: summary; id: Ident.t; desc: class_declaration}
+  | Env_cltype_ of {mutable next: summary; id: Ident.t; desc: class_type_declaration}
+  | Env_open_ of {mutable next: summary; path: Path.t}
+  | Env_functor_arg_ of {mutable next: summary; id: Ident.t}
+  | Env_constraints_ of {mutable next: summary; constrs: type_declaration Path.Map.t}
+  | Env_copy_types_ of {mutable next: summary}
+  | Env_persistent_ of {mutable next: summary; id: Ident.t}
+  | Env_value_unbound_ of {mutable next: summary; name:string; reason:value_unbound_reason}
+  | Env_module_unbound_ of {mutable next: summary; name:string; reason:module_unbound_reason}
 
 type address =
   | Aident of Ident.t
@@ -2948,6 +2964,7 @@ let filter_non_loaded_persistent f env =
           Env_value_unbound {x with next=filter_summary x.next ids}
       | Env_module_unbound x ->
           Env_module_unbound {x with next=filter_summary x.next ids}
+      | _ -> assert false (* TODO: list cases *)
   in
   { env with
     modules = remove_ids env.modules to_remove;
@@ -2979,12 +2996,61 @@ let copy_env
     dst.local_constraints <- local_constraints;
     dst.summary <- summary
 
+let rec strip_summary = function
+  | Env_empty -> Env_empty
+  | Env_value {next; id; desc}->
+      Env_value_ {next=strip_summary next; id; desc}
+  | Env_type {next; id; desc} ->
+      Env_type_ {next=strip_summary next; id; desc}
+  | Env_extension {next; id; desc} ->
+      Env_extension_ {next=strip_summary next; id; desc}
+  | Env_module {next; id; presence; desc} ->
+      Env_module_ {next=strip_summary next; id; presence; desc}
+  | Env_modtype {next; id; desc} ->
+      Env_modtype_ {next=strip_summary next; id; desc}
+  | Env_class {next; id; desc} ->
+      Env_class_ {next=strip_summary next; id; desc}
+  | Env_cltype {next; id; desc} ->
+      Env_cltype_ {next=strip_summary next; id; desc}
+  | Env_open {next; path} ->
+      Env_open_ {next=strip_summary next; path}
+  | Env_functor_arg {next; id} ->
+      Env_functor_arg_ {next=strip_summary next; id}
+  | Env_constraints {next; constrs} ->
+      Env_constraints_ {next=strip_summary next; constrs}
+  | Env_copy_types {next} ->
+      Env_copy_types_ {next=strip_summary next}
+  | Env_persistent {next; id} ->
+      begin match Persistent_env.find_in_cache persistent_env (Ident.name id) with
+      | Some _ -> Env_persistent_ {next=strip_summary next; id}
+      | None -> strip_summary next
+      end
+  | Env_value_unbound {next; name; reason} ->
+      Env_value_unbound_ {next=strip_summary next; name; reason}
+  | Env_module_unbound {next; name; reason} ->
+      Env_module_unbound_ {next=strip_summary next; name; reason}
+
+  | Env_value_ _
+  | Env_type_ _
+  | Env_extension_ _
+  | Env_module_ _
+  | Env_modtype_ _
+  | Env_class_ _
+  | Env_cltype_ _
+  | Env_open_ _
+  | Env_functor_arg_ _
+  | Env_constraints_ _
+  | Env_copy_types_ _
+  | Env_persistent_ _
+  | Env_value_unbound_ _
+  | Env_module_unbound_ _ as s -> s
+
 let keep_only_summary env =
   if env.flags land only_summary_flag = 0 then begin
     let backup = {env with flags = env.flags} in
     copy_env ~src:empty ~dst:env;
     env.flags <- backup.flags lor only_summary_flag;
-    env.summary <- backup.summary;
+    env.summary <- strip_summary backup.summary;
     env.local_constraints <- backup.local_constraints;
     restore_summary_list := (backup, env) :: !restore_summary_list;
   end
