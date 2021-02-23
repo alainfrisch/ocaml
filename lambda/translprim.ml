@@ -58,6 +58,7 @@ type comparison =
   | Greater_equal
   | Greater_than
   | Compare
+  | Max
 
 type comparison_kind =
   | Compare_generic
@@ -358,6 +359,7 @@ let primitives_table =
     "%greaterequal", Comparison(Greater_equal, Compare_generic);
     "%greaterthan", Comparison(Greater_than, Compare_generic);
     "%compare", Comparison(Compare, Compare_generic);
+    "%max", Comparison(Max, Compare_generic);
   ]
 
 
@@ -375,13 +377,10 @@ let lookup_primitive_and_mark_used loc p env path =
   | x -> x
 
 let simplify_constant_constructor = function
-  | Equal -> true
-  | Not_equal -> true
-  | Less_equal -> false
-  | Less_than -> false
-  | Greater_equal -> false
-  | Greater_than -> false
-  | Compare -> false
+  | Equal | Not_equal -> true
+  | Less_equal | Less_than
+  | Greater_equal| Greater_than
+  | Compare | Max -> false
 
 (* The following function computes the greatest lower bound in the
    semilattice of array kinds:
@@ -593,6 +592,7 @@ let comparison_primitive comparison comparison_kind =
   | Compare, Compare_nativeints -> Pcompare_bints Pnativeint
   | Compare, Compare_int32s -> Pcompare_bints Pint32
   | Compare, Compare_int64s -> Pcompare_bints Pint64
+  | Max, _ -> assert false
 
 let lambda_of_loc kind sloc =
   let loc = to_location sloc in
@@ -647,6 +647,16 @@ let lambda_of_prim prim_name prim loc args arg_exps =
       Lprim(Pccall prim, Lconst (const_int 0) :: args, loc)
   | External prim, args ->
       Lprim(Pccall prim, args, loc)
+  | Comparison(Max, kind), [e1; e2] ->
+      name_lambda Strict e1
+        (fun x1 ->
+           name_lambda Strict e2
+             (fun x2 ->
+                Lifthenelse(Lprim(comparison_primitive Greater_than kind,
+                                  [Lvar x1;Lvar x2],Loc_unknown),Lvar x1,Lvar x2
+                           )
+             )
+        )
   | Comparison(comp, knd), ([_;_] as args) ->
       let prim = comparison_primitive comp knd in
       Lprim(prim, args, loc)
@@ -775,6 +785,7 @@ let lambda_primitive_needs_event_after = function
 let primitive_needs_event_after = function
   | Primitive (prim,_) -> lambda_primitive_needs_event_after prim
   | External _ -> true
+  | Comparison(Max, _) -> true
   | Comparison(comp, knd) ->
       lambda_primitive_needs_event_after (comparison_primitive comp knd)
   | Lazy_force | Send | Send_self | Send_cache -> true
