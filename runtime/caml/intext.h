@@ -31,6 +31,7 @@
 
 #define Intext_magic_number_small 0x8495A6BE
 #define Intext_magic_number_big 0x8495A6BF
+#define Intext_magic_number_blit 0x8495A6C0
 
 /* Header format for the "small" model: 20 bytes
        0   "small" magic number

@@ -37,6 +37,13 @@
 #include "caml/reverse.h"
 #include "caml/signals.h"
 
+struct marshal_header {
+  uint32_t magic;
+  int header_len;
+  uintnat data_len;
+  uintnat num_objects;
+  uintnat whsize;
+};
 
 static unsigned char * intern_src;
 /* Reading pointer in block holding input data. */
@@ -317,7 +324,43 @@ static struct intern_item * intern_resize_stack(struct intern_item * sp)
     }                                                                   \
   } while(0)
 
-static void intern_rec(value *dest)
+static void unblit_rec(value *dest, struct marshal_header *h)
+{
+  uintnat *src = (uintnat*) intern_src;
+  uintnat *p = (uintnat*) intern_dest;
+  uintnat *q = p + h->whsize;
+  //printf("data_len=%ld\n", h->data_len); fflush(stdout);
+  //printf("h0=%lx\n", *((uintnat*)intern_src)); fflush(stdout);
+  //memcpy(p, intern_src, h->data_len);
+  //printf("h0=%lx\n", *p); fflush(stdout);
+  while (p < q) {
+    header_t hd = *(src++);
+    mlsize_t sz = Wosize_hd(hd);
+    tag_t tag = Tag_hd(hd);
+    *(p++) = hd;
+    //printf("tag=%d\n", tag); fflush(stdout);
+    //printf("sz=%ld\n", sz); fflush(stdout);
+    if (tag < No_scan_tag) {
+      while (sz > 0) {
+        uintnat v = *(src++);
+        //printf("v = %lx\n", (uintnat) v); fflush(stdout);
+        if (!Is_long(v)) {
+          *(p++) = (uintnat)intern_dest + v + sizeof(value);
+        } else {
+          *(p++) = v;
+        }
+        sz--;
+      }
+    } else {
+      memcpy(p, src, sz * sizeof(value));
+      p += sz;
+      src += sz;
+    }
+  }
+  *dest = (value) ((char*) intern_dest + sizeof(value));
+}
+
+static void marshal_intern_rec(value *dest)
 {
   unsigned int code;
   tag_t tag;
@@ -599,6 +642,14 @@ static void intern_rec(value *dest)
   intern_free_stack();
 }
 
+static void intern_rec(value *dest, struct marshal_header *h)
+{
+  if (h->magic == Intext_magic_number_blit)
+    unblit_rec(dest, h);
+  else
+    marshal_intern_rec(dest);
+}
+
 static void intern_alloc(mlsize_t whsize, mlsize_t num_objects)
 {
   mlsize_t wosize;
@@ -712,14 +763,6 @@ static value intern_end(value res, mlsize_t whsize)
 
 /* Parsing the header */
 
-struct marshal_header {
-  uint32_t magic;
-  int header_len;
-  uintnat data_len;
-  uintnat num_objects;
-  uintnat whsize;
-};
-
 static void caml_parse_header(char * fun_name,
                               /*out*/ struct marshal_header * h)
 {
@@ -754,11 +797,19 @@ static void caml_parse_header(char * fun_name,
     caml_failwith(errmsg);
 #endif
     break;
+  case Intext_magic_number_blit:
+    h->header_len = 20;
+    read32u(); /* check wordsize (+ endiannes) */
+    h->data_len = read64u();
+    h->num_objects = 0;
+    h->whsize = h->data_len / sizeof(value);
+    break;
+
   default:
     errmsg[sizeof(errmsg) - 1] = 0;
     snprintf(errmsg, sizeof(errmsg) - 1,
-             "%s: bad object",
-             fun_name);
+             "%s: bad object (magic:%hd)",
+             fun_name, h->magic);
     caml_failwith(errmsg);
   }
 }
@@ -803,7 +854,7 @@ value caml_input_val(struct channel *chan)
   intern_init(block, block);
   intern_alloc(h.whsize, h.num_objects);
   /* Fill it in */
-  intern_rec(&res);
+  intern_rec(&res, &h);
   return intern_end(res, h.whsize);
 }
 
@@ -836,7 +887,7 @@ CAMLexport value caml_input_val_from_bytes(value str, intnat ofs)
   intern_alloc(h.whsize, h.num_objects);
   intern_src = &Byte_u(str, ofs + h.header_len); /* If a GC occurred */
   /* Fill it in */
-  intern_rec(&obj);
+  intern_rec(&obj, &h);
   CAMLreturn (intern_end(obj, h.whsize));
 }
 
@@ -851,7 +902,7 @@ static value input_val_from_block(struct marshal_header * h)
   /* Allocate result */
   intern_alloc(h->whsize, h->num_objects);
   /* Fill it in */
-  intern_rec(&obj);
+  intern_rec(&obj, h);
   return (intern_end(obj, h->whsize));
 }
 
@@ -908,6 +959,11 @@ CAMLprim value caml_marshal_data_size(value buff, value ofs)
     caml_failwith("Marshal.data_size: "
                   "object too large to be read back on a 32-bit platform");
 #endif
+    break;
+  case Intext_magic_number_blit:
+    header_len = 20;
+    read32u(); /* check wordsize (+ endiannes) */
+    data_len = read32u();
     break;
   default:
     caml_failwith("Marshal.data_size: bad object");

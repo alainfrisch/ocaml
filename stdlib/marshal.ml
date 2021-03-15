@@ -17,6 +17,7 @@ type extern_flags =
     No_sharing
   | Closures
   | Compat_32
+  | Blit
 (* note: this type definition is used in 'runtime/debugger.c' *)
 
 external to_channel: out_channel -> 'a -> extern_flags list -> unit

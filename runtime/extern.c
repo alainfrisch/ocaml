@@ -42,11 +42,23 @@ static uintnat size_64;  /* Size in words of 64-bit block for struct. */
 enum {
   NO_SHARING = 1,               /* Flag to ignore sharing */
   CLOSURES = 2,                 /* Flag to allow marshaling code pointers */
-  COMPAT_32 = 4                 /* Flag to ensure that output can safely
+  COMPAT_32 = 4,                /* Flag to ensure that output can safely
                                    be read back on a 32-bit platform */
+  BLIT = 8
 };
 
 static int extern_flags;        /* logical or of some of the flags above */
+
+/* Queue for pending values to blit */
+
+#define EXTERN_QUEUE_INIT_SIZE 256
+#define EXTERN_QUEUE_MAX_SIZE (1024*1024*100)
+
+static value extern_queue_init[EXTERN_QUEUE_INIT_SIZE];
+static value * extern_queue = extern_queue_init;
+static uintnat extern_queue_size = EXTERN_QUEUE_INIT_SIZE;
+
+
 
 /* Stack for pending values to marshal */
 
@@ -127,6 +139,12 @@ static void extern_free_stack(void)
     extern_stack = extern_stack_init;
     extern_stack_limit = extern_stack + EXTERN_STACK_INIT_SIZE;
   }
+  if (extern_queue != extern_queue_init) {
+    caml_stat_free(extern_queue);
+    /* Reinitialize the globals for next time around */
+    extern_queue = extern_queue_init;
+    extern_queue_size = EXTERN_QUEUE_INIT_SIZE;
+  }
 }
 
 static struct extern_item * extern_resize_stack(struct extern_item * sp)
@@ -149,6 +167,26 @@ static struct extern_item * extern_resize_stack(struct extern_item * sp)
   extern_stack = newstack;
   extern_stack_limit = newstack + newsize;
   return newstack + sp_offset;
+}
+
+static void extern_resize_queue()
+{
+  asize_t newsize = 2 * extern_queue_size;
+  value * newqueue;
+
+  if (newsize >= EXTERN_QUEUE_MAX_SIZE) extern_stack_overflow();
+  if (extern_queue == extern_queue_init) {
+    newqueue = caml_stat_alloc_noexc(sizeof(value) * newsize);
+    if (newqueue == NULL) extern_stack_overflow();
+    memcpy(newqueue, extern_queue_init,
+           sizeof(value*) * EXTERN_QUEUE_INIT_SIZE);
+  } else {
+    newqueue = caml_stat_resize_noexc(extern_queue,
+                                      sizeof(value) * newsize);
+    if (newqueue == NULL) extern_stack_overflow();
+  }
+  extern_queue = newqueue;
+  extern_queue_size = newsize;
 }
 
 /* Multiplicative Fibonacci hashing
@@ -285,12 +323,12 @@ Caml_inline int extern_lookup_position(value obj,
 /* The [h] parameter is the index in the hash table where the object
    must be inserted.  It was determined during lookup. */
 
-static void extern_record_location(value obj, uintnat h)
+static void extern_record_location(value obj, uintnat h, uintnat pos)
 {
   if (extern_flags & NO_SHARING) return;
   bitvect_set(pos_table.present, h);
   pos_table.entries[h].obj = obj;
-  pos_table.entries[h].pos = obj_counter;
+  pos_table.entries[h].pos = pos;
   obj_counter++;
   if (obj_counter >= pos_table.threshold) extern_resize_position_table();
 }
@@ -435,6 +473,13 @@ static void writeblock(const char * data, intnat len)
   if (extern_ptr + len > extern_limit) grow_extern_output(len);
   memcpy(extern_ptr, data, len);
   extern_ptr += len;
+}
+
+static void writeword(uintnat data)
+{
+  if (extern_ptr + sizeof(uintnat) > extern_limit) grow_extern_output(sizeof(uintnat));
+  *((uintnat*) extern_ptr) = data;
+  extern_ptr += sizeof(uintnat);
 }
 
 Caml_inline void writeblock_float8(const double * data, intnat ndoubles)
@@ -741,7 +786,7 @@ static void extern_rec(value v)
       extern_string(v, len);
       size_32 += 1 + (len + 4) / 4;
       size_64 += 1 + (len + 8) / 8;
-      extern_record_location(v, h);
+      extern_record_location(v, h, obj_counter);
       break;
     }
     case Double_tag: {
@@ -749,7 +794,7 @@ static void extern_rec(value v)
       extern_double(v);
       size_32 += 1 + 2;
       size_64 += 1 + 1;
-      extern_record_location(v, h);
+      extern_record_location(v, h, obj_counter);
       break;
     }
     case Double_array_tag: {
@@ -759,7 +804,7 @@ static void extern_rec(value v)
       extern_double_array(v, nfloats);
       size_32 += 1 + nfloats * 2;
       size_64 += 1 + nfloats;
-      extern_record_location(v, h);
+      extern_record_location(v, h, obj_counter);
       break;
     }
     case Abstract_tag:
@@ -774,7 +819,7 @@ static void extern_rec(value v)
       extern_custom(v, &sz_32, &sz_64);
       size_32 += 2 + ((sz_32 + 3) >> 2);  /* header + ops + data */
       size_64 += 2 + ((sz_64 + 7) >> 3);
-      extern_record_location(v, h);
+      extern_record_location(v, h, obj_counter);
       break;
     }
 #ifdef NO_NAKED_POINTERS
@@ -783,7 +828,7 @@ static void extern_rec(value v)
       extern_header(sz, tag);
       size_32 += 1 + sz;
       size_64 += 1 + sz;
-      extern_record_location(v, h);
+      extern_record_location(v, h, obj_counter);
       i = extern_closure_up_to_env(v);
       if (i >= sz) goto next_item;
       /* Remember that we still have to serialize fields i + 1 ... sz - 1 */
@@ -802,7 +847,7 @@ static void extern_rec(value v)
       extern_header(sz, tag);
       size_32 += 1 + sz;
       size_64 += 1 + sz;
-      extern_record_location(v, h);
+      extern_record_location(v, h, obj_counter);
       /* Remember that we still have to serialize fields 1 ... sz - 1 */
       if (sz > 1) {
         sp++;
@@ -830,7 +875,150 @@ static void extern_rec(value v)
   /* Never reached as function leaves with return */
 }
 
-static int extern_flag_values[] = { NO_SHARING, CLOSURES, COMPAT_32 };
+static void blit_rec(value v)
+{
+  struct extern_item * sp;
+  uintnat h = 0;
+  uintnat pos = 0;
+  uintnat size = 0;
+  header_t hd;
+  tag_t tag;
+  mlsize_t sz;
+
+
+  CAMLassert(!(extern_flags & NO_SHARING));
+  CAMLassert(!(Is_long(v)));
+  extern_init_position_table();
+  sp = extern_stack;
+
+  /* First pass: allocate space for each object, record their position (relative to the beginning of
+     the block) */
+
+ pass1:
+  if (Is_long(v)) goto next_item;
+  if (! (Is_in_value_area(v))) {
+    /* Naked pointer outside the heap: try to marshal it as a code pointer,
+       otherwise fail. */
+    extern_invalid_argument("output_value: value outside heap");
+  }
+  hd = Hd_val(v);
+  tag = Tag_hd(hd);
+
+  if (tag == Forward_tag) {
+    value f = Forward_val (v);
+    if (Is_block (f)
+        && (!Is_in_value_area(f) || Tag_val (f) == Forward_tag
+            || Tag_val (f) == Lazy_tag
+#ifdef FLAT_FLOAT_ARRAY
+            || Tag_val (f) == Double_tag
+#endif
+            )){
+      /* Do not short-circuit the pointer. */
+    }else{
+      v = f;
+      goto pass1;
+    }
+  }
+  /* XXX Atoms are treated specially for two reasons: they are not allocated
+     in the externed block, and they are automatically shared. */
+  sz = Wosize_hd(hd);
+  if (sz == 0) {
+    /* */
+    goto next_item;
+  }
+  /* Output the contents of the object */
+  if (tag == Abstract_tag || tag == Closure_tag || tag == Infix_tag || tag == Custom_tag)
+    extern_invalid_argument("output_value: invalid value");
+
+  /* Check if object already seen */
+  if (extern_lookup_position(v, &pos, &h)) goto next_item;
+
+  /* Record object in output queue */
+  if (obj_counter >= extern_queue_size) extern_resize_queue();
+  extern_queue[obj_counter] = v;
+  /* Record physical location for the object */
+  extern_record_location(v, h, size);
+  /* Allocate size for the object */
+  size += (1 + sz) * sizeof(value);
+  if (tag < No_scan_tag) {
+    /* Remember that we still have to serialize fields 1 ... sz - 1 */
+    if (sz > 1) {
+      sp++;
+      if (sp >= extern_stack_limit) sp = extern_resize_stack(sp);
+      sp->v = &Field(v, 1);
+      sp->count = sz - 1;
+    }
+    /* Continue serialization with the first field */
+    v = Field(v, 0);
+    goto pass1;
+  }
+
+ next_item:
+  /* Pop one more item to marshal, if any */
+  if (sp == extern_stack) goto pass2; /* We are done for pass1 */
+  v = *((sp->v)++);
+  if (--(sp->count) == 0) sp--;
+  goto pass1;
+
+ pass2:
+  //printf("size = %ld, objs = %ld\n", size, obj_counter); fflush(stdout);
+  size = 0;
+  for (int i = 0; i < obj_counter; i++) {
+    //printf("i=%d\n", i); fflush(stdout);
+    v = extern_queue[i];
+    //printf("i=%d, v=%lx\n", i, v); fflush(stdout);
+    hd = Hd_val(v);
+    tag = Tag_hd(hd);
+    sz = Wosize_hd(hd);
+    if (tag < No_scan_tag) {
+      header_t hd = Make_header(sz, tag, Caml_white);
+      writeword(hd);
+      //printf("hd=%lx\n", hd); fflush(stdout);
+      for (int j = 0; j < sz; j++) {
+        value f = Field(v, j);
+        //printf("j=%d v=%lx\n", j, (uintnat) f); fflush(stdout);
+      again:
+        if (Is_long(f)) { writeword(f); continue; }
+
+        {
+          header_t hd = Hd_val(f);
+          tag_t tag = Tag_hd(hd);
+          if (tag == Forward_tag) {
+            value f2 = Forward_val (v);
+            if (Is_block (f2)
+                && (!Is_in_value_area(f2) || Tag_val (f2) == Forward_tag
+                    || Tag_val (f2) == Lazy_tag
+#ifdef FLAT_FLOAT_ARRAY
+                    || Tag_val (f2) == Double_tag
+#endif
+                    )){
+              /* Do not short-circuit the pointer. */
+            }else{
+              f = f2;
+              goto again;
+            }
+          }
+
+          extern_lookup_position(f, &pos, &h);
+          writeword(pos);
+        }
+      }
+    } else {
+      /* Normalize header color */
+      header_t hd = Make_header(sz, tag, Caml_white);
+      writeword(hd);
+      writeblock((char*)v, sizeof(value) * sz);
+    }
+    size += (1 + sz) * sizeof(value);
+  }
+  //printf("size = %ld\n", size);
+  fflush(stdout);
+  extern_free_stack();
+  extern_free_position_table();
+}
+
+
+static int extern_flag_values[] = { NO_SHARING, CLOSURES, COMPAT_32, BLIT };
 
 static intnat extern_value(value v, value flags,
                            /*out*/ char header[32],
@@ -844,11 +1032,22 @@ static intnat extern_value(value v, value flags,
   size_32 = 0;
   size_64 = 0;
   /* Marshal the object */
-  extern_rec(v);
+  if (extern_flags & BLIT)
+    blit_rec(v);
+  else
+    extern_rec(v);
   /* Record end of output */
   close_extern_output();
   /* Write the header */
   res_len = extern_output_length();
+  if (extern_flags & BLIT) {
+    store32(header, Intext_magic_number_blit);
+    store32(header + 4, sizeof(value));
+    store64(header + 8, res_len);
+    store32(header + 4, 0);
+    *header_len = 20;
+    return res_len;
+  }
 #ifdef ARCH_SIXTYFOUR
   if (res_len >= ((intnat)1 << 32) ||
       size_32 >= ((intnat)1 << 32) || size_64 >= ((intnat)1 << 32)) {
@@ -1158,7 +1357,7 @@ CAMLprim value caml_obj_reachable_words(value v)
         continue;
       }
       /* Remember that we've visited this block */
-      extern_record_location(v, h);
+      extern_record_location(v, h, 0);
       /* The block contributes to the total size */
       size += 1 + sz;           /* header word included */
       if (tag < No_scan_tag) {
