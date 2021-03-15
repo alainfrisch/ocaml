@@ -798,7 +798,7 @@ static void caml_parse_header(char * fun_name,
 #endif
     break;
   case Intext_magic_number_blit:
-    h->header_len = 20;
+    h->header_len = 32;
     read32u(); /* check wordsize (+ endiannes) */
     h->data_len = read64u();
     h->num_objects = 0;
@@ -818,7 +818,9 @@ static void caml_parse_header(char * fun_name,
 
 value caml_input_val(struct channel *chan)
 {
+  uint32_t magic;
   intnat r;
+
   char header[32];
   struct marshal_header h;
   char * block;
@@ -833,7 +835,8 @@ value caml_input_val(struct channel *chan)
   else if (r < 20)
     caml_failwith("input_value: truncated object");
   intern_src = (unsigned char *) header;
-  if (read32u() == Intext_magic_number_big) {
+  magic = read32u();
+  if (magic == Intext_magic_number_big || magic == Intext_magic_number_blit) {
     /* Finish reading the header */
     if (caml_really_getblock(chan, header + 20, 32 - 20) < 32 - 20)
       caml_failwith("input_value: truncated object");

@@ -1044,8 +1044,7 @@ static intnat extern_value(value v, value flags,
     store32(header, Intext_magic_number_blit);
     store32(header + 4, sizeof(value));
     store64(header + 8, res_len);
-    store32(header + 4, 0);
-    *header_len = 20;
+    *header_len = 32;
     return res_len;
   }
 #ifdef ARCH_SIXTYFOUR
