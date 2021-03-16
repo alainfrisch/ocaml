@@ -870,12 +870,17 @@ static void blit_relocate()
   for (blk = extern_output_first; blk != NULL; blk = blk->next) {
     uintnat *p = (uintnat*) blk->data;
     uintnat *q = (uintnat*) blk->end;
+    uintnat *next_src = ((uintnat*) *p);
+    header_t next_hd = *(next_src - 1);
     while (p < q) {
-      uintnat *src = ((uintnat*) *p);
-      header_t hd = *(src - 1);
+      uintnat *src = next_src;
+      header_t hd = next_hd;
       mlsize_t sz = Wosize_hd(hd);
       tag_t tag = Tag_hd(hd);
       *(p++) = Make_header(sz, tag, Caml_white);
+
+      if (p + sz < q) { next_src = (uintnat*) *(p+sz); next_hd = *(next_src - 1); } /* prefecth next header */
+
       if (tag < No_scan_tag) {
         for (; sz > 0; sz--) {
           uintnat v = *(src++);
