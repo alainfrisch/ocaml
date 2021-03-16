@@ -243,7 +243,6 @@ static void extern_resize_position_table(void)
   pos_table.present = new_present;
   pos_table.entries = new_entries;
 
-  printf("GROW\n"); fflush(stdout);
   /* Insert every entry of the old table in the new table */
   for (i = 0; i < old.size; i++) {
     if (! bitvect_test(old.present, i)) continue;
@@ -858,7 +857,6 @@ static void blit_relocate()
   struct output_block * blk;
   uintnat h = 0;
   uintnat pos = 0;
-  uintnat obj = 0;
   CAMLassert(extern_userprovided_output == NULL); // TODO
 
   /* This assumes that objects don't span blocks */
@@ -870,7 +868,6 @@ static void blit_relocate()
       header_t hd = *(p++);
       mlsize_t sz = Wosize_hd(hd);
       tag_t tag = Tag_hd(hd);
-      obj++;
       if (tag < No_scan_tag) {
         for (; sz > 0; sz--) {
           uintnat v = *p;
@@ -920,9 +917,12 @@ static void blit_rec(value v)
       /* Check if object already seen */
       if (!extern_lookup_or_record_location(v, size)) {
         /* Copy the object */
-        // TODO: normalize header color (here, or during relocation)
-        writeblock((char*)v - sizeof(value), sizeof(value) * (sz + 1));
-        size += (1 + sz) * sizeof(value);
+        int len = sizeof(value) * (sz + 1);
+        if (extern_ptr + len > extern_limit) grow_extern_output(len);
+        *((uintnat*)extern_ptr) = Make_header(sz, tag, Caml_white);
+        memcpy(extern_ptr + sizeof(value), (uintnat*)v, len - sizeof(value));
+        extern_ptr += len;
+        size += len;
         if (tag < No_scan_tag) {
           /* Remember that we still have to serialize fields 1 ... sz - 1 */
           if (sz > 1) {
