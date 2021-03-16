@@ -49,17 +49,6 @@ enum {
 
 static int extern_flags;        /* logical or of some of the flags above */
 
-/* Queue for pending values to blit */
-
-#define EXTERN_QUEUE_INIT_SIZE 256
-#define EXTERN_QUEUE_MAX_SIZE (1024*1024*100)
-
-static value extern_queue_init[EXTERN_QUEUE_INIT_SIZE];
-static value * extern_queue = extern_queue_init;
-static uintnat extern_queue_size = EXTERN_QUEUE_INIT_SIZE;
-
-
-
 /* Stack for pending values to marshal */
 
 struct extern_item { value * v; mlsize_t count; };
@@ -102,7 +91,8 @@ struct position_table {
 #define Bits_word (8 * sizeof(uintnat))
 #define Bitvect_size(n) (((n) + Bits_word - 1) / Bits_word)
 
-#define POS_TABLE_INIT_SIZE_LOG2 8
+#define POS_TABLE_INIT_SIZE_LOG2 12
+// 8
 #define POS_TABLE_INIT_SIZE (1 << POS_TABLE_INIT_SIZE_LOG2)
 
 static uintnat pos_table_present_init[Bitvect_size(POS_TABLE_INIT_SIZE)];
@@ -139,12 +129,6 @@ static void extern_free_stack(void)
     extern_stack = extern_stack_init;
     extern_stack_limit = extern_stack + EXTERN_STACK_INIT_SIZE;
   }
-  if (extern_queue != extern_queue_init) {
-    caml_stat_free(extern_queue);
-    /* Reinitialize the globals for next time around */
-    extern_queue = extern_queue_init;
-    extern_queue_size = EXTERN_QUEUE_INIT_SIZE;
-  }
 }
 
 static struct extern_item * extern_resize_stack(struct extern_item * sp)
@@ -167,26 +151,6 @@ static struct extern_item * extern_resize_stack(struct extern_item * sp)
   extern_stack = newstack;
   extern_stack_limit = newstack + newsize;
   return newstack + sp_offset;
-}
-
-static void extern_resize_queue()
-{
-  asize_t newsize = 2 * extern_queue_size;
-  value * newqueue;
-
-  if (newsize >= EXTERN_QUEUE_MAX_SIZE) extern_stack_overflow();
-  if (extern_queue == extern_queue_init) {
-    newqueue = caml_stat_alloc_noexc(sizeof(value) * newsize);
-    if (newqueue == NULL) extern_stack_overflow();
-    memcpy(newqueue, extern_queue_init,
-           sizeof(value*) * EXTERN_QUEUE_INIT_SIZE);
-  } else {
-    newqueue = caml_stat_resize_noexc(extern_queue,
-                                      sizeof(value) * newsize);
-    if (newqueue == NULL) extern_stack_overflow();
-  }
-  extern_queue = newqueue;
-  extern_queue_size = newsize;
 }
 
 /* Multiplicative Fibonacci hashing
@@ -279,6 +243,7 @@ static void extern_resize_position_table(void)
   pos_table.present = new_present;
   pos_table.entries = new_entries;
 
+  printf("GROW\n"); fflush(stdout);
   /* Insert every entry of the old table in the new table */
   for (i = 0; i < old.size; i++) {
     if (! bitvect_test(old.present, i)) continue;
@@ -331,6 +296,26 @@ static void extern_record_location(value obj, uintnat h, uintnat pos)
   pos_table.entries[h].pos = pos;
   obj_counter++;
   if (obj_counter >= pos_table.threshold) extern_resize_position_table();
+}
+
+
+static int extern_lookup_or_record_location(value obj, uintnat pos)
+{
+  uintnat h = Hash(obj);
+  while (1) {
+    if (! bitvect_test(pos_table.present, h)) {
+      bitvect_set(pos_table.present, h);
+      pos_table.entries[h].obj = obj;
+      pos_table.entries[h].pos = pos;
+      obj_counter++;
+      if (obj_counter >= pos_table.threshold) extern_resize_position_table();
+      return 0;
+    }
+    if (pos_table.entries[h].obj == obj) {
+      return 1;
+    }
+    h = (h + 1) & pos_table.mask;
+  }
 }
 
 /* To buffer the output */
@@ -473,13 +458,6 @@ static void writeblock(const char * data, intnat len)
   if (extern_ptr + len > extern_limit) grow_extern_output(len);
   memcpy(extern_ptr, data, len);
   extern_ptr += len;
-}
-
-static void writeword(uintnat data)
-{
-  if (extern_ptr + sizeof(uintnat) > extern_limit) grow_extern_output(sizeof(uintnat));
-  *((uintnat*) extern_ptr) = data;
-  extern_ptr += sizeof(uintnat);
 }
 
 Caml_inline void writeblock_float8(const double * data, intnat ndoubles)
@@ -875,11 +853,42 @@ static void extern_rec(value v)
   /* Never reached as function leaves with return */
 }
 
+static void blit_relocate()
+{
+  struct output_block * blk;
+  uintnat h = 0;
+  uintnat pos = 0;
+  uintnat obj = 0;
+  CAMLassert(extern_userprovided_output == NULL); // TODO
+
+  /* This assumes that objects don't span blocks */
+  extern_output_block->end = extern_ptr;
+  for (blk = extern_output_first; blk != NULL; blk = blk->next) {
+    uintnat *p = (uintnat*) blk->data;
+    uintnat *q = (uintnat*) blk->end;
+    while (p < q) {
+      header_t hd = *(p++);
+      mlsize_t sz = Wosize_hd(hd);
+      tag_t tag = Tag_hd(hd);
+      obj++;
+      if (tag < No_scan_tag) {
+        for (; sz > 0; sz--) {
+          uintnat v = *p;
+          if (!Is_long(v)) {
+            extern_lookup_position(v, &pos, &h);
+            *p = pos;
+          }
+          p++;
+        }
+      } else
+        p += sz;
+    }
+  }
+}
+
 static void blit_rec(value v)
 {
   struct extern_item * sp;
-  uintnat h = 0;
-  uintnat pos = 0;
   uintnat size = 0;
   header_t hd;
   tag_t tag;
@@ -894,127 +903,51 @@ static void blit_rec(value v)
   /* First pass: allocate space for each object, record their position (relative to the beginning of
      the block) */
 
- pass1:
-  if (Is_long(v)) goto next_item;
-  if (! (Is_in_value_area(v))) {
-    /* Naked pointer outside the heap: try to marshal it as a code pointer,
-       otherwise fail. */
-    extern_invalid_argument("output_value: value outside heap");
-  }
-  hd = Hd_val(v);
-  tag = Tag_hd(hd);
+  while (1) {
+    if (!Is_long(v)) {
+      if (! (Is_in_value_area(v)))
+        extern_invalid_argument("output_value: value outside heap");
 
-  if (tag == Forward_tag) {
-    value f = Forward_val (v);
-    if (Is_block (f)
-        && (!Is_in_value_area(f) || Tag_val (f) == Forward_tag
-            || Tag_val (f) == Lazy_tag
-#ifdef FLAT_FLOAT_ARRAY
-            || Tag_val (f) == Double_tag
-#endif
-            )){
-      /* Do not short-circuit the pointer. */
-    }else{
-      v = f;
-      goto pass1;
-    }
-  }
-  /* XXX Atoms are treated specially for two reasons: they are not allocated
-     in the externed block, and they are automatically shared. */
-  sz = Wosize_hd(hd);
-  if (sz == 0) {
-    /* */
-    goto next_item;
-  }
-  /* Output the contents of the object */
-  if (tag == Abstract_tag || tag == Closure_tag || tag == Infix_tag || tag == Custom_tag)
-    extern_invalid_argument("output_value: invalid value");
+      hd = Hd_val(v);
+      tag = Tag_hd(hd);
+      sz = Wosize_hd(hd);
 
-  /* Check if object already seen */
-  if (extern_lookup_position(v, &pos, &h)) goto next_item;
+      /* Output the contents of the object */
+      /* Note: atoms are not supported yet */
+      if (sz == 0 || tag == Abstract_tag || tag == Closure_tag || tag == Infix_tag || tag == Custom_tag)
+        extern_invalid_argument("output_value: invalid value");
 
-  /* Record object in output queue */
-  if (obj_counter >= extern_queue_size) extern_resize_queue();
-  extern_queue[obj_counter] = v;
-  /* Record physical location for the object */
-  extern_record_location(v, h, size);
-  /* Allocate size for the object */
-  size += (1 + sz) * sizeof(value);
-  if (tag < No_scan_tag) {
-    /* Remember that we still have to serialize fields 1 ... sz - 1 */
-    if (sz > 1) {
-      sp++;
-      if (sp >= extern_stack_limit) sp = extern_resize_stack(sp);
-      sp->v = &Field(v, 1);
-      sp->count = sz - 1;
-    }
-    /* Continue serialization with the first field */
-    v = Field(v, 0);
-    goto pass1;
-  }
-
- next_item:
-  /* Pop one more item to marshal, if any */
-  if (sp == extern_stack) goto pass2; /* We are done for pass1 */
-  v = *((sp->v)++);
-  if (--(sp->count) == 0) sp--;
-  goto pass1;
-
- pass2:
-  //printf("size = %ld, objs = %ld\n", size, obj_counter); fflush(stdout);
-  size = 0;
-  for (int i = 0; i < obj_counter; i++) {
-    //printf("i=%d\n", i); fflush(stdout);
-    v = extern_queue[i];
-    //printf("i=%d, v=%lx\n", i, v); fflush(stdout);
-    hd = Hd_val(v);
-    tag = Tag_hd(hd);
-    sz = Wosize_hd(hd);
-    if (tag < No_scan_tag) {
-      header_t hd = Make_header(sz, tag, Caml_white);
-      writeword(hd);
-      //printf("hd=%lx\n", hd); fflush(stdout);
-      for (int j = 0; j < sz; j++) {
-        value f = Field(v, j);
-        //printf("j=%d v=%lx\n", j, (uintnat) f); fflush(stdout);
-      again:
-        if (Is_long(f)) { writeword(f); continue; }
-
-        {
-          header_t hd = Hd_val(f);
-          tag_t tag = Tag_hd(hd);
-          if (tag == Forward_tag) {
-            value f2 = Forward_val (v);
-            if (Is_block (f2)
-                && (!Is_in_value_area(f2) || Tag_val (f2) == Forward_tag
-                    || Tag_val (f2) == Lazy_tag
-#ifdef FLAT_FLOAT_ARRAY
-                    || Tag_val (f2) == Double_tag
-#endif
-                    )){
-              /* Do not short-circuit the pointer. */
-            }else{
-              f = f2;
-              goto again;
-            }
+      /* Check if object already seen */
+      if (!extern_lookup_or_record_location(v, size)) {
+        /* Copy the object */
+        // TODO: normalize header color (here, or during relocation)
+        writeblock((char*)v - sizeof(value), sizeof(value) * (sz + 1));
+        size += (1 + sz) * sizeof(value);
+        if (tag < No_scan_tag) {
+          /* Remember that we still have to serialize fields 1 ... sz - 1 */
+          if (sz > 1) {
+            sp++;
+            if (sp >= extern_stack_limit) sp = extern_resize_stack(sp);
+            sp->v = &Field(v, 1);
+            sp->count = sz - 1;
           }
-
-          extern_lookup_position(f, &pos, &h);
-          writeword(pos);
+          /* Continue serialization with the first field */
+          v = Field(v, 0);
+          continue;
         }
       }
-    } else {
-      /* Normalize header color */
-      header_t hd = Make_header(sz, tag, Caml_white);
-      writeword(hd);
-      writeblock((char*)v, sizeof(value) * sz);
     }
-    size += (1 + sz) * sizeof(value);
+
+    /* Pop one more item to marshal, if any */
+    if (sp == extern_stack) {
+      blit_relocate();
+      extern_free_stack();
+      extern_free_position_table();
+      return;
+    }
+    v = *((sp->v)++);
+    if (--(sp->count) == 0) sp--;
   }
-  //printf("size = %ld\n", size);
-  fflush(stdout);
-  extern_free_stack();
-  extern_free_position_table();
 }
 
 
