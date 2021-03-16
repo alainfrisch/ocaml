@@ -317,6 +317,14 @@ static int extern_lookup_or_record_location(value obj, uintnat pos)
   }
 }
 
+Caml_inline uintnat extern_lookup_location(value obj)
+{
+  uintnat h = Hash(obj);
+  while (pos_table.entries[h].obj != obj)
+    h = (h + 1) & pos_table.mask;
+  return pos_table.entries[h].pos;
+}
+
 /* To buffer the output */
 
 static char * extern_userprovided_output;
@@ -855,8 +863,6 @@ static void extern_rec(value v)
 static void blit_relocate()
 {
   struct output_block * blk;
-  uintnat h = 0;
-  uintnat pos = 0;
   CAMLassert(extern_userprovided_output == NULL); // TODO
 
   /* This assumes that objects don't span blocks */
@@ -865,20 +871,20 @@ static void blit_relocate()
     uintnat *p = (uintnat*) blk->data;
     uintnat *q = (uintnat*) blk->end;
     while (p < q) {
-      header_t hd = *(p++);
+      uintnat *src = ((uintnat*) *p);
+      header_t hd = *(src - 1);
       mlsize_t sz = Wosize_hd(hd);
       tag_t tag = Tag_hd(hd);
+      *(p++) = Make_header(sz, tag, Caml_white);
       if (tag < No_scan_tag) {
         for (; sz > 0; sz--) {
-          uintnat v = *p;
-          if (!Is_long(v)) {
-            extern_lookup_position(v, &pos, &h);
-            *p = pos;
-          }
-          p++;
+          uintnat v = *(src++);
+          *(p++) = (Is_long(v) ? v : extern_lookup_location(v));
         }
-      } else
+      } else {
+        memcpy(p, src, sz * sizeof(value));
         p += sz;
+      }
     }
   }
 }
@@ -919,8 +925,7 @@ static void blit_rec(value v)
         /* Copy the object */
         int len = sizeof(value) * (sz + 1);
         if (extern_ptr + len > extern_limit) grow_extern_output(len);
-        *((uintnat*)extern_ptr) = Make_header(sz, tag, Caml_white);
-        memcpy(extern_ptr + sizeof(value), (uintnat*)v, len - sizeof(value));
+        *((uintnat*)extern_ptr) = v;
         extern_ptr += len;
         size += len;
         if (tag < No_scan_tag) {
