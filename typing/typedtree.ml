@@ -97,7 +97,7 @@ and exp_extra =
   | Texp_newtype of string
 
 and expression_desc =
-    Texp_ident of Path.t * Longident.t loc * Types.value_description
+    Texp_ident of Path.t * Longident.t * Types.value_description
   | Texp_constant of constant
   | Texp_let of rec_flag * value_binding list * expression
   | Texp_function of { arg_label : arg_label; param : Ident.t;

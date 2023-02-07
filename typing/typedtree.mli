@@ -171,7 +171,7 @@ and exp_extra =
         (** fun (type t) ->  *)
 
 and expression_desc =
-    Texp_ident of Path.t * Longident.t loc * Types.value_description
+    Texp_ident of Path.t * Longident.t * Types.value_description
         (** x
             M.x
          *)

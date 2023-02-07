@@ -156,7 +156,7 @@ let rec push_defaults loc bindings use_lhs cases partial =
           Texp_match
             ({exp with exp_type = pat.pat_type; exp_env = env; exp_desc =
               Texp_ident
-                (Path.Pident param, mknoloc (Longident.Lident name), desc)},
+                (Path.Pident param, Longident.Lident name, desc)},
              cases, partial) }
       in
       [{c_lhs = {pat with pat_desc = Tpat_var (param, mknoloc name)};

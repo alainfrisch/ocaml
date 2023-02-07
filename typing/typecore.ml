@@ -2913,9 +2913,9 @@ and type_expect_
             let (path, _) =
               Env.find_value_by_name (Longident.Lident ("self-" ^ cl_num)) env
             in
-            Texp_ident(path, lid, desc)
+            Texp_ident(path, lid.txt, desc)
         | _ ->
-            Texp_ident(path, lid, desc)
+            Texp_ident(path, lid.txt, desc)
       in
       rue {
         exp_desc; exp_loc = loc; exp_extra = [];
@@ -4454,7 +4454,7 @@ and type_argument ?explanation ?recarg env sarg ty_expected' ty_expected =
         {exp_type = ty; exp_loc = Location.none; exp_env = exp_env;
          exp_extra = []; exp_attributes = [];
          exp_desc =
-         Texp_ident(Path.Pident id, mknoloc (Longident.Lident name), desc)}
+         Texp_ident(Path.Pident id, Longident.Lident name, desc)}
       in
       let eta_pat, eta_var = var_pair "eta" ty_arg in
       let func texp =
