@@ -87,8 +87,8 @@ module General = struct
   let view_desc loc = function
     | Tpat_any ->
        `Any
-    | Tpat_var (id, str) ->
-       `Var (id, {txt=str;loc})
+    | Tpat_var id ->
+       `Var (id, {txt=Ident.name id;loc})
     | Tpat_alias (p, id, str) ->
        `Alias (p, id, str)
     | Tpat_constant cst ->
@@ -110,7 +110,7 @@ module General = struct
 
   let erase_desc = function
     | `Any -> Tpat_any
-    | `Var (id, str) -> Tpat_var (id, str.txt)
+    | `Var (id, _str) -> Tpat_var id
     | `Alias (p, id, str) -> Tpat_alias (p, id, str)
     | `Constant cst -> Tpat_constant cst
     | `Tuple ps -> Tpat_tuple ps

@@ -159,7 +159,7 @@ let rec push_defaults loc bindings use_lhs cases partial =
                 (Path.Pident param, Longident.Lident name, desc)},
              cases, partial) }
       in
-      [{c_lhs = {pat with pat_desc = Tpat_var (param, name)};
+      [{c_lhs = {pat with pat_desc = Tpat_var param};
         c_guard = None; c_rhs= wrap_bindings bindings exp}]
   | _ ->
       cases
@@ -214,7 +214,7 @@ let rec cut n l =
 
 let rec iter_exn_names f pat =
   match pat.pat_desc with
-  | Tpat_var (id, _) -> f id
+  | Tpat_var id -> f id
   | Tpat_alias (p, id, _) ->
       f id;
       iter_exn_names f p
@@ -916,7 +916,7 @@ and transl_let ~scopes ?(in_structure=false) rec_flag pat_expr_list =
       let idlist =
         List.map
           (fun {vb_pat=pat} -> match pat.pat_desc with
-              Tpat_var (id,_) -> id
+              Tpat_var id -> id
             | Tpat_alias ({pat_desc=Tpat_any}, id,_) -> id
             | _ -> assert false)
         pat_expr_list in

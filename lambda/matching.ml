@@ -3192,7 +3192,7 @@ let rec comp_match_handlers comp_fun partial ctx first_match next_matchs =
 let rec name_pattern default = function
   | ((pat, _), _) :: rem -> (
       match pat.pat_desc with
-      | Tpat_var (id, _) -> id
+      | Tpat_var id -> id
       | Tpat_alias (_, id, _) -> id
       | _ -> name_pattern default rem
     )
@@ -3678,7 +3678,7 @@ let for_let ~scopes loc param pat body =
       (* This eliminates a useless variable (and stack slot in bytecode)
          for "let _ = ...". See #6865. *)
       Lsequence (param, body)
-  | Tpat_var (id, _) ->
+  | Tpat_var id ->
       (* fast path, and keep track of simple bindings to unboxable numbers *)
       let k = Typeopt.value_kind pat.pat_env pat.pat_type in
       Llet (Strict, k, id, param, body)

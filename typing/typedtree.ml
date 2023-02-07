@@ -53,7 +53,7 @@ and pat_extra =
 and 'k pattern_desc =
   (* value patterns *)
   | Tpat_any : value pattern_desc
-  | Tpat_var : Ident.t * string -> value pattern_desc
+  | Tpat_var : Ident.t -> value pattern_desc
   | Tpat_alias :
       value general_pattern * Ident.t * string loc -> value pattern_desc
   | Tpat_constant : constant -> value pattern_desc
@@ -753,8 +753,8 @@ let rec iter_bound_idents
   : type k . _ -> k general_pattern -> _
   = fun f pat ->
   match pat.pat_desc with
-  | Tpat_var (id,s) ->
-     f (id,{txt=s;loc=pat.pat_loc},pat.pat_type)
+  | Tpat_var id ->
+     f (id,{txt=Ident.name id;loc=pat.pat_loc},pat.pat_type)
   | Tpat_alias(p, id, s) ->
       iter_bound_idents f p;
       f (id,s,pat.pat_type)
@@ -796,9 +796,9 @@ let alpha_var env id = List.assoc id env
 let rec alpha_pat
   : type k . _ -> k general_pattern -> k general_pattern
   = fun env p -> match p.pat_desc with
-  | Tpat_var (id, s) -> (* note the ``Not_found'' case *)
+  | Tpat_var id -> (* note the ``Not_found'' case *)
       {p with pat_desc =
-       try Tpat_var (alpha_var env id, s) with
+       try Tpat_var (alpha_var env id) with
        | Not_found -> Tpat_any}
   | Tpat_alias (p1, id, s) ->
       let new_p =  alpha_pat env p1 in

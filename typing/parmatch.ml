@@ -37,7 +37,7 @@ let omega_list = Patterns.omega_list
 
 let extra_pat =
   make_pat
-    (Tpat_var (Ident.create_local "+", "+"))
+    (Tpat_var (Ident.create_local "+"))
     Ctype.none Env.empty
 
 
@@ -918,8 +918,7 @@ let build_other ext env =
       | Construct { cstr_tag = Cstr_extension _ } ->
           (* let c = {c with cstr_name = "*extension*"} in *) (* PR#7330 *)
           make_pat
-            (Tpat_var (Ident.create_local "*extension*",
-                       "*extension*"))
+            (Tpat_var (Ident.create_local "*extension*"))
             Ctype.none Env.empty
       | Construct _ ->
           begin match ext with
@@ -1845,7 +1844,7 @@ let rec initial_only_guarded = function
 let contains_extension pat =
   exists_pattern
     (function
-     | {pat_desc=Tpat_var (_, "*extension*")} -> true
+     | {pat_desc=Tpat_var id} when Ident.name id = "*extension*" -> true
      | _ -> false)
     pat
 
