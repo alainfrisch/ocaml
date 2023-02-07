@@ -2840,6 +2840,19 @@ let check_apply_prim_type prim typ =
       end
   | _ -> false
 
+
+let hashcons () =
+  let h = Hashtbl.create 16 in
+  fun x ->
+    match Hashtbl.find_opt h x with
+    | Some x -> x
+    | None ->
+        Hashtbl.add h x x;
+        x
+
+let hashcons_lid = hashcons ()
+let hashcons_path = hashcons ()
+
 (* Merge explanation to type clash error *)
 
 let with_explanation explanation f =
@@ -2915,7 +2928,7 @@ and type_expect_
             in
             Texp_ident(path, lid.txt, desc)
         | _ ->
-            Texp_ident(path, lid.txt, desc)
+            Texp_ident(hashcons_path path, hashcons_lid lid.txt, desc)
       in
       rue {
         exp_desc; exp_loc = loc; exp_extra = [];
