@@ -278,8 +278,7 @@ let pat
   let pat_desc : k pattern_desc =
     match x.pat_desc with
     | Tpat_any
-    | Tpat_constant _ -> x.pat_desc
-    | Tpat_var (id, s) -> Tpat_var (id, map_loc sub s)
+    | Tpat_constant _ | Tpat_var _ -> x.pat_desc
     | Tpat_tuple l -> Tpat_tuple (List.map (sub.pat sub) l)
     | Tpat_construct (loc, cd, l, vto) ->
         let vto = Option.map (fun (vl,cty) ->

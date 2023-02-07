@@ -300,8 +300,8 @@ let pattern : type k . _ -> k T.general_pattern -> _ = fun sub pat ->
   match pat with
       { pat_extra=[Tpat_unpack, loc, _attrs]; pat_desc = Tpat_any; _ } ->
         Ppat_unpack { txt = None; loc  }
-    | { pat_extra=[Tpat_unpack, _, _attrs]; pat_desc = Tpat_var (_,name); _ } ->
-        Ppat_unpack { name with txt = Some name.txt }
+    | { pat_extra=[Tpat_unpack, _, _attrs]; pat_desc = Tpat_var (_,name); pat_loc; _ } ->
+        Ppat_unpack { loc = pat_loc; txt = Some name }
     | { pat_extra=[Tpat_type (_path, lid), _, _attrs]; _ } ->
         Ppat_type (map_loc sub lid)
     | { pat_extra= (Tpat_constraint ct, _, _attrs) :: rem; _ } ->
@@ -314,9 +314,9 @@ let pattern : type k . _ -> k T.general_pattern -> _ = fun sub pat ->
         begin
           match (Ident.name id).[0] with
             'A'..'Z' ->
-              Ppat_unpack { name with txt = Some name.txt}
+              Ppat_unpack { txt = Some name; loc = pat.pat_loc }
           | _ ->
-              Ppat_var name
+              Ppat_var { txt = name; loc = pat.pat_loc }
         end
 
     (* We transform (_ as x) in x if _ and x have the same location.

@@ -229,7 +229,7 @@ let pat
   List.iter (pat_extra sub) extra;
   match pat_desc with
   | Tpat_any  -> ()
-  | Tpat_var (_, s) -> iter_loc sub s
+  | Tpat_var _ -> ()
   | Tpat_constant _ -> ()
   | Tpat_tuple l -> List.iter (sub.pat sub) l
   | Tpat_construct (lid, _, l, vto) ->

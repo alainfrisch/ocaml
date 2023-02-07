@@ -53,7 +53,7 @@ and pat_extra =
 and 'k pattern_desc =
   (* value patterns *)
   | Tpat_any : value pattern_desc
-  | Tpat_var : Ident.t * string loc -> value pattern_desc
+  | Tpat_var : Ident.t * string -> value pattern_desc
   | Tpat_alias :
       value general_pattern * Ident.t * string loc -> value pattern_desc
   | Tpat_constant : constant -> value pattern_desc
@@ -754,7 +754,7 @@ let rec iter_bound_idents
   = fun f pat ->
   match pat.pat_desc with
   | Tpat_var (id,s) ->
-     f (id,s,pat.pat_type)
+     f (id,{txt=s;loc=pat.pat_loc},pat.pat_type)
   | Tpat_alias(p, id, s) ->
       iter_bound_idents f p;
       f (id,s,pat.pat_type)

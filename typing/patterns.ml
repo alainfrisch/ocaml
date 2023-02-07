@@ -84,11 +84,11 @@ module General = struct
   ]
   type pattern = view pattern_data
 
-  let view_desc = function
+  let view_desc loc = function
     | Tpat_any ->
        `Any
     | Tpat_var (id, str) ->
-       `Var (id, str)
+       `Var (id, {txt=str;loc})
     | Tpat_alias (p, id, str) ->
        `Alias (p, id, str)
     | Tpat_constant cst ->
@@ -106,11 +106,11 @@ module General = struct
     | Tpat_lazy p -> `Lazy p
 
   let view p : pattern =
-    { p with pat_desc = view_desc p.pat_desc }
+    { p with pat_desc = view_desc p.pat_loc p.pat_desc }
 
   let erase_desc = function
     | `Any -> Tpat_any
-    | `Var (id, str) -> Tpat_var (id, str)
+    | `Var (id, str) -> Tpat_var (id, str.txt)
     | `Alias (p, id, str) -> Tpat_alias (p, id, str)
     | `Constant cst -> Tpat_constant cst
     | `Tuple ps -> Tpat_tuple ps

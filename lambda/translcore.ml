@@ -159,7 +159,7 @@ let rec push_defaults loc bindings use_lhs cases partial =
                 (Path.Pident param, Longident.Lident name, desc)},
              cases, partial) }
       in
-      [{c_lhs = {pat with pat_desc = Tpat_var (param, mknoloc name)};
+      [{c_lhs = {pat with pat_desc = Tpat_var (param, name)};
         c_guard = None; c_rhs= wrap_bindings bindings exp}]
   | _ ->
       cases

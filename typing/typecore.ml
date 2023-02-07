@@ -1484,7 +1484,7 @@ and type_pat_aux
       let ty = instance expected_ty in
       let id = enter_variable loc name ty sp.ppat_attributes in
       rvp {
-        pat_desc = Tpat_var (id, name);
+        pat_desc = Tpat_var (id, name.txt);
         pat_loc = loc; pat_extra=[];
         pat_type = ty;
         pat_attributes = sp.ppat_attributes;
@@ -1504,7 +1504,7 @@ and type_pat_aux
           let v = { name with txt = s } in
           let id = enter_variable loc v t ~is_module:true sp.ppat_attributes in
           rvp {
-            pat_desc = Tpat_var (id, v);
+            pat_desc = Tpat_var (id, v.txt);
             pat_loc = sp.ppat_loc;
             pat_extra=[Tpat_unpack, loc, sp.ppat_attributes];
             pat_type = t;
@@ -1518,7 +1518,7 @@ and type_pat_aux
       let cty, ty, ty' =
         solve_Ppat_poly_constraint ~refine env lloc sty expected_ty in
       let id = enter_variable lloc name ty' attrs in
-      rvp { pat_desc = Tpat_var (id, name);
+      rvp { pat_desc = Tpat_var (id, name.txt);
             pat_loc = lloc;
             pat_extra = [Tpat_constraint cty, loc, sp.ppat_attributes];
             pat_type = ty;
@@ -1779,12 +1779,12 @@ and type_pat_aux
       let p = type_pat category sp expected_ty' in
       let extra = (Tpat_constraint cty, loc, sp.ppat_attributes) in
       begin match category, (p : k general_pattern) with
-      | Value, {pat_desc = Tpat_var (id,s); _} ->
+      | Value, {pat_desc = Tpat_var (id,s); pat_loc = loc; _} ->
           { p with
             pat_type = ty;
             pat_desc =
             Tpat_alias
-              ({p with pat_desc = Tpat_any; pat_attributes = []}, id,s);
+              ({p with pat_desc = Tpat_any; pat_attributes = []}, id,{txt=s;loc});
             pat_extra = [extra];
           }
       | _, p ->
@@ -4461,7 +4461,7 @@ and type_argument ?explanation ?recarg env sarg ty_expected' ty_expected =
           }
         in
         let exp_env = Env.add_value id desc env in
-        {pat_desc = Tpat_var (id, mknoloc name); pat_type = ty;pat_extra=[];
+        {pat_desc = Tpat_var (id, name); pat_type = ty;pat_extra=[];
          pat_attributes = [];
          pat_loc = Location.none; pat_env = env},
         {exp_type = ty; exp_loc = Location.none; exp_env = exp_env;

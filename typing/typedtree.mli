@@ -75,7 +75,7 @@ and 'k pattern_desc =
   (* value patterns *)
   | Tpat_any : value pattern_desc
         (** _ *)
-  | Tpat_var : Ident.t * string loc -> value pattern_desc
+  | Tpat_var : Ident.t * string -> value pattern_desc
         (** x *)
   | Tpat_alias :
       value general_pattern * Ident.t * string loc -> value pattern_desc
